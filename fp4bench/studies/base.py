@@ -180,13 +180,13 @@ class Study:
                 f"its {self.m1_reps} M1 reps and the warmup need {self.m1_reps + 1} prompt "
                 f"sets; there are {settings.M1_SETS} (settings.M1_SETS)"
             )
-        largest = max(self.batches)
-        if self.prompts is Prompts.M1 and largest > settings.M1_SET_SIZE:
+        on_m1 = (c.batch for c in self.cells if c.prompt_len == settings.M1_INPUT_LEN)
+        if (largest_on_m1 := max(on_m1, default=0)) > settings.M1_SET_SIZE:
             self._refuse(
-                f"its largest batch {largest} is above the {settings.M1_SET_SIZE} prompts of an "
-                f"M1 prompt set (settings.M1_SET_SIZE)"
+                f"its largest batch on the M1 prompts ({largest_on_m1}) is above the "
+                f"{settings.M1_SET_SIZE} prompts of an M1 prompt set (settings.M1_SET_SIZE)"
             )
-        if largest > self.server.max_num_seqs:
+        if (largest := max(self.batches)) > self.server.max_num_seqs:
             self._refuse(
                 f"its largest batch {largest} is above its server's {self.server.max_num_seqs} "
                 f"sequences (--max-num-seqs)"

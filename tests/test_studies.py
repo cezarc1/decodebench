@@ -594,8 +594,8 @@ def test_a_study_on_the_m1_prompts_refuses_a_batch_above_an_m1_prompt_set():
     assert max(EXPB.batches) == settings.M1_SET_SIZE == EXPB.server.max_num_seqs == 512
     with pytest.raises(
         ValueError,
-        match=r"^study expb: its largest batch 513 is above the 512 prompts of an M1 prompt set "
-        r"\(settings.M1_SET_SIZE\)$",
+        match=r"^study expb: its largest batch on the M1 prompts \(513\) is above the 512 "
+        r"prompts of an M1 prompt set \(settings.M1_SET_SIZE\)$",
     ):
         replace(
             EXPB,
@@ -605,13 +605,19 @@ def test_a_study_on_the_m1_prompts_refuses_a_batch_above_an_m1_prompt_set():
         )
 
 
-def test_a_cell_study_sizes_its_prompt_sets_per_batch_so_only_its_server_bounds_a_batch():
-    cells = (*EXPC.cells, Cell(513, 360))
-    replace(EXPC, cells=cells, server=replace(EXPC.server, max_num_seqs=513))
+def test_a_cell_study_bounds_only_its_cells_that_reuse_the_m1_prompts_by_an_m1_prompt_set():
+    more = replace(EXPC.server, max_num_seqs=1024)
+    replace(EXPC, cells=(*EXPC.cells, Cell(513, 360)), server=more)
+    with pytest.raises(
+        ValueError,
+        match=r"^study expc: its largest batch on the M1 prompts \(513\) is above the 512 "
+        r"prompts of an M1 prompt set \(settings.M1_SET_SIZE\)$",
+    ):
+        replace(EXPC, cells=(*EXPC.cells, Cell(513, settings.M1_INPUT_LEN)), server=more)
     with pytest.raises(
         ValueError, match=r"^study expc: its largest batch 513 is above its server's 512 sequences"
     ):
-        replace(EXPC, cells=cells)
+        replace(EXPC, cells=(*EXPC.cells, Cell(513, 360)))
 
 
 def test_a_study_refuses_a_batch_above_its_servers_max_num_seqs():
