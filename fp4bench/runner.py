@@ -6,7 +6,7 @@ import sys
 import time
 import traceback
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -322,11 +322,10 @@ def run_server_session(
 PROTOCOL_FIELDS_ADDED_FOR_EXPC = ("cells", "max_model_len", "hf_overrides")
 
 
-def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
+def check_protocol_unchanged(lines: Sequence[ManifestLine], study: Study) -> None:
     """On a restart, every protocol field but `rounds` must match, and `rounds` never falls
     below an earlier start's: an extended run stays extended. A count above the study's that is
     not its extension was never registered (study_to_run refuses it), so that run is a dead end."""
-    lines = load_rows(run_dir / "manifests.jsonl", ManifestLine)
     if not lines:
         return
     new = json.loads(json.dumps(study.to_protocol_dict()))
@@ -366,26 +365,31 @@ def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
         raise RuntimeError("; ".join(errors))
 
 
-def check_code_unchanged(run_dir: Path, code: CodeVersion) -> None:
-    """On a restart, the code must be the first start's commit, both checkouts clean."""
-    lines = load_rows(run_dir / "manifests.jsonl", ManifestLine)
-    if not lines:
+def _baseline(lines: Sequence[ManifestLine]) -> ManifestLine | None:
+    """The first start that passed its checks: an aborted start ran no session."""
+    return next((line for line in lines if not line.problems), None)
+
+
+def check_code_unchanged(lines: Sequence[ManifestLine], code: CodeVersion) -> None:
+    """On a restart, the code must be the baseline start's commit, both checkouts clean."""
+    baseline = _baseline(lines)
+    if baseline is None:
         return
-    first = lines[0]
-    if "code_commit" in first.missing:
+    if "code_commit" in baseline.missing:
         print(
-            f"warning: the first start of this run predates code_commit in its manifest, so this "
-            f"start's code version ({code.describe()}) cannot be checked against it",
+            f"warning: the first start of this run that passed its checks predates code_commit in "
+            f"its manifest, so this start's code version ({code.describe()}) cannot be checked "
+            "against it",
             file=sys.stderr,
         )
         return
-    then = CodeVersion(first.code_commit, first.code_dirty)
+    then = CodeVersion(baseline.code_commit, baseline.code_dirty)
     if not (then.is_clean and code == then):
         raise RuntimeError(
-            f"this start's code ({code.describe()}) is not verifiably the first start's "
-            f"({then.describe()}): a restart must run the same commit from a clean checkout, as "
-            "uncommitted or unknown changes cannot be compared; a run is one code version; "
-            "start a new run id"
+            f"this start's code ({code.describe()}) is not verifiably that of the first start "
+            f"that passed its checks ({then.describe()}): a restart must run the same commit "
+            "from a clean checkout, as uncommitted or unknown changes cannot be compared; a run "
+            "is one code version; start a new run id"
         )
 
 
@@ -398,16 +402,10 @@ def _identity(inputs: dict) -> dict:
     return out
 
 
-def check_inputs_unchanged(run_dir: Path, inputs: dict) -> None:
+def check_inputs_unchanged(lines: Sequence[ManifestLine], inputs: dict) -> None:
     """On a restart, the inputs must be those of the first start that passed its checks."""
-    baseline = next(
-        (
-            line.inputs
-            for line in load_rows(run_dir / "manifests.jsonl", ManifestLine)
-            if not line.problems
-        ),
-        None,
-    )
+    first = _baseline(lines)
+    baseline = None if first is None else first.inputs
     if not isinstance(baseline, dict):
         return
     old, new = _identity(baseline), _identity(inputs)
@@ -660,8 +658,9 @@ def run_experiment(
     if bad:
         raise ValueError(f"rerun_rounds {bad} outside the protocol's rounds 0..{study.rounds - 1}")
     run_dir.mkdir(parents=True, exist_ok=True)
-    check_protocol_unchanged(run_dir, study)
-    check_code_unchanged(run_dir, CodeVersion.from_env())
+    lines = load_rows(run_dir / "manifests.jsonl", ManifestLine)
+    check_protocol_unchanged(lines, study)
+    check_code_unchanged(lines, CodeVersion.from_env())
     manifest = collect_manifest()
     problems = verify_manifest(manifest)
     inputs = collect_inputs(study)
@@ -673,7 +672,7 @@ def run_experiment(
     problems += input_errors
     problems += nva_pin_problems(study)
     if not input_errors:
-        check_inputs_unchanged(run_dir, inputs)
+        check_inputs_unchanged(lines, inputs)
     if study.require_published:
         problems += [
             published_problem(kind)

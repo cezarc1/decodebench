@@ -1309,10 +1309,11 @@ protocols ([§11][e11], 2026-10-04).
   registered count from the last manifest line and a lower one is a restart that forgot `--rounds`.
   A first start from before Experiment C's fields existed counts as having their defaults (no
   cells, a 4,096-token window, no override), because its argv was byte for byte the same.
-- **Code identity.** On a restart, the code must be the first start's `code_commit`, and neither
-  start may have had uncommitted or unknown changes, because those cannot be compared: a run is
-  one code version. A first start from before `code_commit` existed cannot be checked, so the
-  restart goes on with a warning.
+- **Code identity.** On a restart, the code must be the `code_commit` of the first start that
+  passed its environment check (the input identity's baseline below), and neither start may have
+  had uncommitted or unknown changes, because those cannot be compared: a run is one code version.
+  A baseline start from before `code_commit` existed cannot be checked, so the restart goes on
+  with a warning.
 - **Input identity.** These must equal those of the first start that passed its environment
   check, because a start that aborted ran no session:
   - the prompt hashes (M1, NLL and, for cell studies, `c_prompts.json`);

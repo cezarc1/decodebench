@@ -657,6 +657,20 @@ def test_a_restart_at_another_or_an_unverifiable_code_version_is_refused_before_
     assert not (stubbed.run_dir / "errors.jsonl").exists()
 
 
+def test_the_code_is_checked_against_the_first_start_that_passed_its_checks(stubbed, monkeypatch):
+    stubbed.problems = [VLLM_MISMATCH]
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    refused_start(stubbed, "environment check failed")
+    stubbed.problems = []
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_B, False))
+    lines = start(stubbed)
+    assert [m["code_commit"] for m in lines] == [SHA_A, SHA_B]
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    message, lines = refused_start(stubbed, "a run is one code version; start a new run id")
+    assert f"({SHA_A})" in message and f"({SHA_B})" in message
+    assert len(lines) == 2
+
+
 def test_a_restart_of_a_run_whose_first_start_predates_the_code_version_warns_and_goes_on(
     stubbed, monkeypatch, capsys
 ):
@@ -2784,11 +2798,11 @@ def test_m2_batches_are_the_concurrencies_unless_m2_is_off():
 )
 def test_every_committed_run_would_restart_under_its_protocol(tmp_path, run, mode):
     shutil.copy(RUNS_DIR / run / "manifests.jsonl", tmp_path / "manifests.jsonl")
-    rounds = (load_rows(tmp_path / "manifests.jsonl", ManifestLine)[-1].protocol or {})["rounds"]
-    study = replace(STUDIES[mode], rounds=rounds)
-    runner.check_protocol_unchanged(tmp_path, study)
+    lines = load_rows(tmp_path / "manifests.jsonl", ManifestLine)
+    study = replace(STUDIES[mode], rounds=(lines[-1].protocol or {})["rounds"])
+    runner.check_protocol_unchanged(lines, study)
     with pytest.raises(RuntimeError, match="m1_reps"):
-        runner.check_protocol_unchanged(tmp_path, replace(study, m1_reps=4))
+        runner.check_protocol_unchanged(lines, replace(study, m1_reps=4))
 
 
 def drop_from_first_manifest_line(env, *fields):
