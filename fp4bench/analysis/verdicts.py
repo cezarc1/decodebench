@@ -15,7 +15,7 @@ from fp4bench.analysis.cells import (
     sessions_of,
 )
 from fp4bench.analysis.compare import ContrastResult, RatioResult
-from fp4bench.analysis.inputs import expected_kernels, primary_batches, registered_rounds
+from fp4bench.analysis.inputs import Served, primary_batches, registered_rounds
 from fp4bench.core.schema import ManifestLine, ServerRow
 from fp4bench.core.types import (
     Cell,
@@ -292,11 +292,11 @@ def kernel_scan(
     batches: Sequence[int],
     spec: KernelScanSpec,
     *,
-    served_args: Mapping[Treatment, tuple[str, ...]],
+    served: Served,
     g5b: Mapping | None = None,
 ) -> KernelScan | None:
     """The NVa rule (`spec`, METHODOLOGY.md#nv-alt); None for a run without a scan treatment.
-    Each treatment is expected to run the kernel of its `served_args` (inputs.served_args)."""
+    Each treatment is expected to run the kernel it was `served` with."""
     sessions = sessions_of(servers)
     scan = spec.treatments
     failed_by: dict[Treatment, ServerRow] = {}
@@ -319,8 +319,7 @@ def kernel_scan(
     ratio = {
         t: {c: m / nv_median[c] for c, m in median[t].items() if c in nv_median} for t in treatments
     }
-    kernels = expected_kernels(served_args)
-    expected = {t: kernels[t] for t in treatments}
+    expected = {t: served.kernels[t] for t in treatments}
     cute_dsl_kernel = LinearBackend.FLASHINFER_CUTEDSL.kernel
     observed = {
         t: sorted({k for s in sessions if s.treatment == t for k in s.linear_kernels or []})
@@ -422,7 +421,7 @@ def kernel_scan(
         margin=margin,
         selected=selected,
         selected_kernel=expected[selected] if selected else None,
-        selected_server_args=served_args[selected] if selected else None,
+        selected_server_args=served.args[selected] if selected else None,
         reason=None
         if selected
         else (

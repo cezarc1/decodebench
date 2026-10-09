@@ -3,6 +3,7 @@ import json
 import pickle
 import statistics
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,7 +12,7 @@ from fp4bench.analysis import cells as cl
 from fp4bench.analysis import verdicts as vd
 from fp4bench.analysis.compare import ContrastResult, RatioResult, ratio_table
 from fp4bench.analysis.gates import g5b_nll
-from fp4bench.analysis.inputs import primary_batches, served_args
+from fp4bench.analysis.inputs import primary_batches, served
 from fp4bench.analysis.stats import OverallVerdict
 from fp4bench.core.types import Cell, LinearBackend, RatioName, Treatment, Verdict
 from fp4bench.studies import kernel_scan as scan_rule
@@ -26,7 +27,7 @@ from tests.analysis_runs import (
     FAIL_ERROR,
     SCAN_FACTORS,
     SMOKE_CS,
-    TABLE_ARGS,
+    TABLE_SERVED,
     batch_steps,
     expb,
     expb_manifest,
@@ -293,7 +294,7 @@ def _scan(servers, m1, line: Any = "ok", spec: scan_rule.KernelScanSpec = scan_r
         rows,
         SMOKE_CS,
         spec,
-        served_args=served_args(typed),
+        served=served(typed, Path("run")),
         g5b=g5b_nll(sessions, typed),
     )
     assert scan is not None
@@ -513,7 +514,7 @@ def test_a_failed_scan_kernel_is_ineligible_even_with_steps_in_the_cells():
         typed_servers(rows),
         SMOKE_CS,
         scan_rule.NVA_SCAN,
-        served_args=TABLE_ARGS,
+        served=TABLE_SERVED,
         g5b=g5b_nll(sessions, typed_manifest(smoke_manifest())),
     )
     assert scan is not None
@@ -528,7 +529,7 @@ def test_there_is_no_scan_or_crosscheck_in_a_run_without_scan_treatments():
     servers, m1, _ = synthetic(1.0)
     rows = typed_servers(servers)
     scan = vd.kernel_scan(
-        batch_steps(servers, m1), rows, (8, 32), scan_rule.NVA_SCAN, served_args=TABLE_ARGS
+        batch_steps(servers, m1), rows, (8, 32), scan_rule.NVA_SCAN, served=TABLE_SERVED
     )
     assert scan is None
     assert vd.nvx_crosscheck(batch_steps(servers, m1), (8, 32), scan_rule.NVX_CROSSCHECK) is None
@@ -539,7 +540,7 @@ def test_the_scan_is_there_when_its_only_sessions_failed():
     rows = typed_servers(fail(servers, "NVc"))
     m1 = [r for r in m1 if r["treatment"] != "NVc"]
     scan = vd.kernel_scan(
-        batch_steps(servers, m1), rows, SMOKE_CS, scan_rule.NVA_SCAN, served_args=TABLE_ARGS
+        batch_steps(servers, m1), rows, SMOKE_CS, scan_rule.NVA_SCAN, served=TABLE_SERVED
     )
     assert scan is not None and scan.selected is None
 

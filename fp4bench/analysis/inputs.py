@@ -1,7 +1,6 @@
 """What a run directory recorded: typed rows, the last manifest line, the checkpoint report."""
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -53,8 +52,8 @@ class RunData:
         return resolve_checkpoint(self.run_dir, self.manifest)
 
     @cached_property
-    def served_args(self) -> dict[Treatment, tuple[str, ...]]:
-        return served_args(self.manifest)
+    def served(self) -> "Served":
+        return served(self.manifest, self.run_dir)
 
     @cached_property
     def m1_shape(self) -> M1Shape:
@@ -118,12 +117,22 @@ def inputs(manifest: ManifestLine | None) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def served_args(manifest: ManifestLine | None) -> dict[Treatment, tuple[str, ...]]:
-    """The args each treatment was served with: inputs.treatment_server_args of the last manifest
-    line, and model.TREATMENTS' for a treatment it does not record."""
-    recorded = inputs(manifest).get("treatment_server_args")
-    if recorded is None:
-        recorded = {}
+@dataclass(frozen=True)
+class Served:
+    """How the run served each treatment: its server args, and the linear kernel class and
+    act-quant fusion those args select (what G1 and the kernel scan expect)."""
+
+    args: dict[Treatment, tuple[str, ...]]
+    kernels: dict[Treatment, LinearKernel]
+    fusions: dict[Treatment, bool]
+
+
+def served(manifest: ManifestLine | None, run_dir: Path) -> Served:
+    """inputs.treatment_server_args of the last manifest line, and model.TREATMENTS' args for a
+    treatment it does not record (or a manifest without the record); a malformed record, or args
+    that select no kernel or fusion, raise ValueError naming the run and the treatment."""
+    where = f"{run_dir}: inputs.treatment_server_args of the last manifest line"
+    recorded = inputs(manifest).get("treatment_server_args", {})
     if not (
         isinstance(recorded, dict)
         and all(t in Treatment for t in recorded)
@@ -132,27 +141,20 @@ def served_args(manifest: ManifestLine | None) -> dict[Treatment, tuple[str, ...
             for args in recorded.values()
         )
     ):
-        raise ValueError(
-            f"inputs.treatment_server_args of the last manifest line is not a list of strings "
-            f"per treatment: {recorded!r}"
-        )
-    return {
+        raise ValueError(f"{where} is not a list of strings per treatment: {recorded!r}")
+    args = {
         t: tuple(recorded[t]) if t in recorded else spec.server_args
         for t, spec in model.TREATMENTS.items()
     }
-
-
-def expected_kernels(served: Mapping[Treatment, tuple[str, ...]]) -> dict[Treatment, LinearKernel]:
-    """The linear kernel class each treatment's served args select."""
-    return {t: model.expected_linear_kernel(t, args) for t, args in served.items()}
-
-
-def expected_fusions(served: Mapping[Treatment, tuple[str, ...]]) -> dict[Treatment, bool]:
-    """Whether each treatment's served args fuse the activation quantization."""
-    return {
-        t: model.expected_act_quant_fusion(t, args) is ActQuantFusion.ON
-        for t, args in served.items()
-    }
+    kernels: dict[Treatment, LinearKernel] = {}
+    fusions: dict[Treatment, bool] = {}
+    for t, served_with in args.items():
+        try:
+            kernels[t] = model.expected_linear_kernel(t, served_with)
+            fusions[t] = model.expected_act_quant_fusion(t, served_with) is ActQuantFusion.ON
+        except ValueError as exc:
+            raise ValueError(f"{where}, {t} {list(served_with)!r}: {exc}") from exc
+    return Served(args, kernels, fusions)
 
 
 def registered_rounds(manifest: ManifestLine | None) -> float | None:

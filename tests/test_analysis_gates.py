@@ -9,7 +9,7 @@ from fp4bench.analysis import cells as cl
 from fp4bench.analysis import gates as gt
 from fp4bench.analysis.cells import m1_steps, session_ids
 from fp4bench.analysis.compare import ContrastResult, contrast
-from fp4bench.analysis.inputs import resolve_checkpoint, served_args
+from fp4bench.analysis.inputs import resolve_checkpoint, served
 from fp4bench.core.types import Cell, Gate, LinearBackend, RatioName, Treatment, Verdict
 from fp4bench.studies import model
 from fp4bench.studies.expb import EXPB
@@ -28,7 +28,7 @@ from tests.analysis_runs import (
     GOOD_REFERENCE,
     H_BATCH,
     SMOKE_CS,
-    TABLE_ARGS,
+    TABLE_SERVED,
     TEL,
     aa_results,
     c_build,
@@ -51,6 +51,8 @@ from tests.analysis_runs import (
     typed_servers,
 )
 
+RUN = Path("runs/run-1")
+PIN = ("--linear-backend", "flashinfer_cutedsl")
 GATE_NAMES = (
     "G1_kernels",
     "G2_bytes",
@@ -79,7 +81,7 @@ def _gates(
 ):
     line = typed_manifest(manifest() if manifest_line == "ok" else manifest_line)
     spec = spec or gt.batch_gate_spec(
-        batches, line, served_args(line), prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
+        batches, line, served(line, RUN), prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
     )
     return gt.gate_report(
         typed_servers(servers),
@@ -105,11 +107,9 @@ def test_a_clean_synthetic_run_passes_every_gate():
 
 
 def test_no_sessions_means_no_gate_passes():
-    by_cell = gt.GateSpec(
-        cells=(), m2=False, by_cell=True, n2=settings.M1_N2, served_args=TABLE_ARGS
-    )
+    by_cell = gt.GateSpec(cells=(), m2=False, by_cell=True, n2=settings.M1_N2, served=TABLE_SERVED)
     by_batch = gt.batch_gate_spec(
-        (), None, TABLE_ARGS, prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
+        (), None, TABLE_SERVED, prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
     )
     for spec in (by_batch, by_cell):
         gates = gt.gate_report([], [], [], None, None, None, spec, gt.AaRatios({}, ()))
@@ -214,14 +214,32 @@ def test_g1_expects_the_table_of_a_manifest_without_recorded_args():
 
 
 @pytest.mark.parametrize(
-    "recorded", [["--linear-backend"], {"NVa": "--linear-backend"}, {"XX": []}, {"NV": [1]}]
+    "recorded", [None, ["--linear-backend"], {"NVa": "--linear-backend"}, {"XX": []}, {"NV": [1]}]
 )
-def test_a_malformed_record_of_the_server_args_is_refused(recorded):
-    servers, m1, m2 = synthetic(1.0)
+def test_a_malformed_record_of_the_server_args_is_refused_naming_the_run(recorded):
     line = manifest()
     line["inputs"]["treatment_server_args"] = recorded
-    with pytest.raises(ValueError, match="treatment_server_args"):
-        _gates(servers, m1, m2, manifest_line=line)
+    with pytest.raises(ValueError, match="not a list of strings per treatment") as exc:
+        served(typed_manifest(line), RUN)
+    assert str(exc.value).startswith(f"{RUN}: inputs.treatment_server_args of the last manifest")
+
+
+@pytest.mark.parametrize(
+    "treatment, args, why",
+    [
+        ("NVa", ["--linear-backend"], "--linear-backend has no value"),
+        ("NVa", ["--linear-backend", "marlin"], "'marlin' is not a valid LinearBackend"),
+        ("NV", [*PIN, "--compilation-config", '{"pass_config": '], "Expecting value"),
+    ],
+)
+def test_recorded_args_that_select_no_kernel_or_fusion_are_refused_naming_where(
+    treatment, args, why
+):
+    line = recording_args(manifest(), Treatment(treatment), tuple(args))
+    with pytest.raises(ValueError, match=why) as exc:
+        served(typed_manifest(line), RUN)
+    where = f"{RUN}: inputs.treatment_server_args of the last manifest line, {treatment} {args!r}: "
+    assert str(exc.value).startswith(where)
 
 
 def test_g1_fails_a_treatment_with_no_expected_kernel_or_fusion():
@@ -799,7 +817,7 @@ def _c_gates(mutate=None, manifest_line=None, **kw) -> dict:
         checkpoint,
         source,
         gt.GateSpec(
-            cells=cells, m2=False, by_cell=True, n2=settings.M1_N2, served_args=served_args(line)
+            cells=cells, m2=False, by_cell=True, n2=settings.M1_N2, served=served(line, RUN)
         ),
         gt.AaEffects(effects, AA_EFFECT_MARGIN_MS, AA),
     )

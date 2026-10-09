@@ -12,7 +12,7 @@ from fp4bench import settings
 from fp4bench.analysis import cells as cl
 from fp4bench.analysis import design, plots
 from fp4bench.analysis.compare import RatioResult
-from fp4bench.analysis.inputs import served_args
+from fp4bench.analysis.inputs import served
 from fp4bench.core.schema import M1Row, M2Row, ManifestLine, ServerRow, _numbered_rows
 from fp4bench.core.types import Treatment, ValueKey, Verdict
 from fp4bench.studies import expc, model
@@ -58,7 +58,7 @@ CLEAN_CKPT = {
 }
 GOOD_REFERENCE = {"per_prompt": BF16_PP, "mean": statistics.fmean(BF16_PP)}
 FOUR = ("MX", "NV", "NVa", "MXp")
-TABLE_ARGS = served_args(None)
+TABLE_SERVED = served(None, Path("table"))
 FIVE = ("MX", "NV", "NVa", "MXp", "NVnf")
 SMOKE_CS = (1, 32, 128)
 EXPB_CS = (128, 256, 512)

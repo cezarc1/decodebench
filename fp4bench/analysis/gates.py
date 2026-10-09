@@ -27,9 +27,8 @@ from fp4bench.analysis.compare import (
     ratio_json,
 )
 from fp4bench.analysis.inputs import (
+    Served,
     bf16_reference,
-    expected_fusions,
-    expected_kernels,
     protocol_cells,
     registered_batches,
     registered_reps,
@@ -55,14 +54,14 @@ GateReport = dict[str, dict[str, Any]]
 @dataclass(frozen=True)
 class GateSpec:
     """What a run's gates check; `by_cell` lists M1 blocks by (C, P), not by batch. G6a sizes
-    the KV pool with the rows' `n2`, and G1 expects the kernel and fusion of each treatment's
-    `served_args` (inputs.RunData)."""
+    the KV pool with the rows' `n2`, and G1 expects the kernel and fusion each treatment was
+    `served` with."""
 
     cells: tuple[Cell, ...]
     m2: bool
     by_cell: bool
     n2: int
-    served_args: Mapping[Treatment, tuple[str, ...]]
+    served: Served
 
     @property
     def names(self) -> tuple[Gate, ...]:
@@ -76,7 +75,7 @@ class GateSpec:
 def batch_gate_spec(
     batches: Iterable[int],
     manifest: ManifestLine | None,
-    served_args: Mapping[Treatment, tuple[str, ...]],
+    served: Served,
     *,
     prompt_len: int,
     n2: int,
@@ -88,7 +87,7 @@ def batch_gate_spec(
         m2=True,
         by_cell=False,
         n2=n2,
-        served_args=served_args,
+        served=served,
     )
 
 
@@ -661,9 +660,8 @@ def gate_report(
         g3_gate = g3_aa_effects(
             g3.effects, any(s.treatment == g3.aa.numer for s in sessions), g3.margin_ms, g3.aa
         )
-    served = spec.served_args
     report: GateReport = {
-        Gate.G1: g1_kernels(sessions, manifest, expected_kernels(served), expected_fusions(served)),
+        Gate.G1: g1_kernels(sessions, manifest, spec.served.kernels, spec.served.fusions),
         Gate.G2: g2_bytes(sessions, checkpoint, checkpoint_source),
         Gate.G3: g3_gate,
         Gate.G4: (_g4_by_cell(sids, m1) if spec.by_cell else _g4_by_batch(sids, m1, m2)),
