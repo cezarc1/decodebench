@@ -6,7 +6,7 @@
 Benchmark realistic LLM workloads (a current, relevant model, served by a real engine, at realistic batch
 sizes).
 
-#### TL;DR — _Last updated October 2026_
+#### NVFP4 vs MXFP4 TL;DR — _Last updated October 2026_
 
 - **([Benchmark your workload](https://x.com/StasBekman/status/2107221020197429422?s=20))**.
   Decode performance differences primarily depend on the kernels between the NVFP4 and MXFP4.
