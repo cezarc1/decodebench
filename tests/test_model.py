@@ -170,6 +170,18 @@ def test_an_unknown_linear_backend_has_no_expected_kernel():
         model.expected_linear_kernel(T.NVA, ("--linear-backend", "flashinfer_unknown"))
 
 
+def test_the_linear_backend_is_read_as_vllm_reads_it():
+    twice = (
+        *model.pinned_to(LinearBackend.CUTLASS),
+        *model.pinned_to(LinearBackend.FLASHINFER_CUDNN),
+    )
+    assert model.expected_linear_kernel(T.NVA, twice) == "FlashInferCudnnNvFp4LinearKernel"
+    joined = ("--linear-backend=cutlass",)
+    assert model.expected_linear_kernel(T.NVA, joined) == "CutlassNvFp4LinearKernel"
+    with pytest.raises(ValueError, match="--linear-backend"):
+        model.expected_linear_kernel(T.NVA, ("--linear-backend",))
+
+
 def test_the_scan_treatments_are_never_cute_dsl_and_nv_stays_pinned_to_it():
     for t in NVA_SCAN.treatments:
         assert SPECS[t].linear_kernel != CUTE_DSL_NV
@@ -204,12 +216,6 @@ def test_only_treatments_that_turn_the_fusion_off_on_the_command_line_are_nvfp4_
         assert spec.act_quant_fusion is (not is_mx and not turned_off), t
 
 
-def test_the_table_declares_the_fusion_its_server_args_serve():
-    for t, spec in SPECS.items():
-        fusion = model.expected_act_quant_fusion(t, spec.server_args)
-        assert (fusion is ActQuantFusion.ON) is spec.act_quant_fusion, t
-
-
 @pytest.mark.parametrize(
     "treatment, args, fusion",
     [
@@ -223,6 +229,11 @@ def test_the_table_declares_the_fusion_its_server_args_serve():
             ActQuantFusion.ON,
         ),
         (T.NVNF, ("--compilation-config", '{"pass_config": {}}'), ActQuantFusion.ON),
+        (
+            T.NVC,
+            ('--compilation-config={"pass_config": {"fuse_act_quant": false}}',),
+            ActQuantFusion.OFF,
+        ),
     ],
 )
 def test_the_fusion_of_server_args_is_off_for_mxfp4_and_where_they_turn_it_off(
@@ -263,6 +274,8 @@ def test_each_linear_backend_names_the_kernel_class_vllm_logs():
 def test_the_act_quant_fusion_is_stored_as_the_bool_g1_compares():
     assert {t for t, s in SPECS.items() if not s.act_quant_fusion} == {T.MX, T.MXP, T.NVNF}
     assert (
-        model.treatment_spec(T.NV, CheckpointKind.NV, PIN, ActQuantFusion.OFF).act_quant_fusion
+        model.treatment_spec(
+            T.NV, CheckpointKind.NV, (*PIN, *model.NO_ACT_QUANT_FUSION)
+        ).act_quant_fusion
         is False
     )

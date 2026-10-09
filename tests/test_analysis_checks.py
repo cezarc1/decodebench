@@ -9,6 +9,7 @@ from fp4bench.analysis import cells as cl
 from fp4bench.analysis import checks as ck
 from fp4bench.analysis import design, stats
 from fp4bench.analysis.inputs import kv_cache_dtype
+from fp4bench.core.argv import flag_value
 from fp4bench.core.types import (
     Cell,
     Format,
@@ -368,13 +369,22 @@ def test_the_served_argv_check_flags_deviations(change, problem):
 
 
 def test_the_served_argv_flag_forms():
-    assert ck.flag_value(["--max-model-len=131072"], "--max-model-len") == "131072"
+    assert flag_value(["--max-model-len=131072"], "--max-model-len") == "131072"
     assert (
-        ck.flag_value(["--max-model-len", "4096", "--max-model-len", "131072"], "--max-model-len")
+        flag_value(["--max-model-len", "4096", "--max-model-len", "131072"], "--max-model-len")
         == "131072"
     )
-    assert ck.flag_value(["--max-model-len"], "--max-model-len") is None
+    assert flag_value(["--max-model-len-x", "4096"], "--max-model-len") is None
+    with pytest.raises(ValueError, match="--max-model-len"):
+        flag_value(["--max-model-len"], "--max-model-len")
     assert "--max-model-len" in c_argv("MX")
+
+
+def test_a_served_flag_without_a_value_is_a_problem():
+    rows = [c_session(1, "NV")]
+    rows[0]["server_argv"].append("--max-model-len")
+    (problem,) = ck.server_argv_check(cl.sessions_of(typed_servers(rows))).problems
+    assert problem.startswith("round 1 NV: ") and "--max-model-len" in problem
 
 
 def test_the_nll_crosscheck_compares_with_the_main_run_and_its_windows():

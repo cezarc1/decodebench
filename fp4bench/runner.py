@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 from fp4bench import settings
+from fp4bench.core.argv import flag_value
 from fp4bench.core.files import file_sha256
 from fp4bench.core.schema import (
     BlockTelemetry,
@@ -521,7 +522,7 @@ def nva_pin_problems(study: Study) -> list[str]:
         return []
     nva = model.TREATMENTS[Treatment.NVA]
     args = nva.server_args
-    if "--linear-backend" not in args:
+    if flag_value(args, "--linear-backend") is None:
         return [
             f"NVa has no --linear-backend in model.TREATMENTS (args {args!r}), so it "
             "would run vLLM's default kernel, the same one as NV: set NVa from the smoke "

@@ -1773,6 +1773,12 @@ def test_a_protocol_with_nva_runs_once_nva_is_pinned_to_another_kernel(
     assert line["problems"] == [] and "NVa" in [t for _, t in stubbed.sessions]
 
 
+def test_an_nva_pin_written_flag_equals_value_is_a_pin(stubbed, monkeypatch):
+    set_nva_args(monkeypatch, ("--linear-backend=flashinfer_cutlass",))
+    (line,) = start(stubbed, ALL_FULL)
+    assert line["problems"] == [] and "NVa" in [t for _, t in stubbed.sessions]
+
+
 @pytest.mark.parametrize("study", [STUDY, SMOKE])
 def test_protocols_without_nva_are_not_held_to_the_nva_rule(stubbed, study):
     assert "NVa" not in study.treatments

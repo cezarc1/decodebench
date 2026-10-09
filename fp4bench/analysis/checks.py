@@ -23,6 +23,7 @@ from fp4bench.analysis.inputs import (
     protocol_cells,
 )
 from fp4bench.bytes_model import r_ideal, step_bytes
+from fp4bench.core.argv import flag_value
 from fp4bench.core.schema import ManifestLine, ServerRow, load_rows
 from fp4bench.core.types import (
     Cell,
@@ -241,17 +242,6 @@ def _parse_overrides(value: object) -> dict | None:
     return None
 
 
-def flag_value(argv: Sequence[str], flag: str) -> str | None:
-    """The value of the last `flag` ("--flag value" or "--flag=value"), None if absent."""
-    value = None
-    for i, arg in enumerate(argv):
-        if arg == flag and i + 1 < len(argv):
-            value = argv[i + 1]
-        elif arg.startswith(flag + "="):
-            value = arg[len(flag) + 1 :]
-    return value
-
-
 @dataclass(frozen=True)
 class ArgvCheck:
     sessions_checked: int
@@ -267,10 +257,14 @@ def server_argv_check(sessions: Sequence[ServerRow]) -> ArgvCheck:
         if not (isinstance(argv, list) and argv and all(isinstance(a, str) for a in argv)):
             problems.append(f"{who}: no server_argv")
             continue
-        window = flag_value(argv, "--max-model-len")
+        try:
+            window = flag_value(argv, "--max-model-len")
+            override = flag_value(argv, "--hf-overrides")
+        except ValueError as exc:
+            problems.append(f"{who}: {exc}")
+            continue
         if window != str(SERVER.max_model_len):
             problems.append(f"{who}: served --max-model-len {window!r}, not {SERVER.max_model_len}")
-        override = flag_value(argv, "--hf-overrides")
         if _parse_overrides(override) != HF_OVERRIDES:
             problems.append(
                 f"{who}: served --hf-overrides {override!r}, not {json.dumps(HF_OVERRIDES)}"
