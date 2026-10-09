@@ -153,6 +153,17 @@ def unexpected_kv_dtype_note(kv_dtype: RecordedKvDtype) -> str | None:
     )
 
 
+def _decode_lengths(data: RunData, sids: set[str]) -> tuple[int, int]:
+    """(n1, n2) of the counted M1 rows; the settings' in a run without any."""
+    pairs = sorted({(row.n1, row.n2) for row in data.m1 if row.session_id in sids})
+    if len(pairs) > 1:
+        raise ValueError(
+            f"{data.run_dir}: several M1 decode lengths (n1, n2) {pairs} in the rows of its "
+            "counted sessions; the mean context is that of one pair"
+        )
+    return pairs[0] if pairs else (settings.M1_N1, settings.M1_N2)
+
+
 def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -> BatchRunResult:
     _require_g3(study, G3Rule.AA_RATIO)
     _require_ratios(study, BATCH_RATIOS)
@@ -173,6 +184,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
             f"the last manifest line has no protocol.cells (Experiment C)"
         )
     prompt_len = prompt_lens[0] if prompt_lens else settings.M1_INPUT_LEN
+    n1, n2 = _decode_lengths(data, sids)
     batches = tuple(cell.batch for cell in cells)
     step = by_batch(m1_steps(data.m1, sids))
     tput = m2_values(data.m2, sids, "aggregate_tps")
@@ -225,7 +237,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         else reference_nll_comparison(sessions, manifest, Path(reference_run)),
     )
     kv = kv_cache_dtype(manifest)
-    context = prompt_len + (settings.M1_N1 + settings.M1_N2) // 2
+    context = prompt_len + (n1 + n2) // 2
     return BatchRunResult(
         run_dir=data.run_dir,
         study=study,

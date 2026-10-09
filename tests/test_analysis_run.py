@@ -225,6 +225,24 @@ def test_a_main_run_reads_its_context_from_the_rows_prompt_length(tmp_path, prom
     assert r_table.split("\n| 8 |")[1].split("\n")[0].endswith(f" {bm.r_ideal(8, context):.4f} |")
 
 
+def test_a_main_run_reads_its_context_from_the_rows_decode_lengths(tmp_path):
+    servers, m1, m2 = synthetic(1.0, (8, 32, 128))
+    for row in m1:
+        row["n1"], row["n2"] = 256, 2304
+    run, out = _run(tmp_path, (servers, m1, m2))
+    assert out.context == settings.M1_INPUT_LEN + (256 + 2304) // 2 == 2304
+    assert "R_ideal: the bytes model's upper bound (§5) at context 2304 " in _md(run)
+
+
+def test_a_main_run_whose_rows_disagree_on_the_decode_lengths_is_refused(tmp_path):
+    servers, m1, m2 = synthetic(1.0, (8, 32, 128))
+    m1[3]["n2"] = 2304
+    run = write_run(tmp_path, servers, m1, m2, manifest())
+    with pytest.raises(ValueError, match=r"several M1 decode lengths") as exc:
+        evaluate(run)
+    assert str(run) in str(exc.value) and "(128, 1152)" in str(exc.value)
+
+
 def test_the_committed_main_runs_are_at_context_1664():
     for run in ("full-1", "expb-1"):
         out = evaluate(RUNS_DIR / run)
