@@ -736,10 +736,25 @@ def test_g1_and_the_scan_expect_the_kernel_of_the_recorded_server_args(tmp_path)
         Treatment.NVC,
         model.pinned_to(LinearBackend.CUTLASS),
     )
-    _, out = _run(tmp_path, (servers, m1, m2), line)
+    run, out = _run(tmp_path, (servers, m1, m2), line)
     assert out.gates[Gate.G1]["expected"]["NVc"] == "CutlassNvFp4LinearKernel"
     assert out.gates[Gate.G1]["pass"] is True
     assert out.scan is not None and out.scan.kernel_matches[Treatment.NVC] is True
+    assert "| NVc | cutlass | CutlassNvFp4LinearKernel | CutlassNvFp4LinearKernel |" in _md(run)
+
+
+def test_the_selected_kernels_args_are_those_the_run_recorded(tmp_path):
+    line = recording_args(
+        smoke_manifest(require_published=False),
+        Treatment.NVT,
+        ("--linear-backend=flashinfer_trtllm",),
+    )
+    run, out = _run(tmp_path, smoke(), line)
+    assert out.scan is not None and out.scan.selected == "NVt"
+    assert out.scan.selected_server_args == ("--linear-backend=flashinfer_trtllm",)
+    md = _md(run)
+    assert '`("--linear-backend=flashinfer_trtllm")` its `server_args`' in md
+    assert "| NVt | flashinfer_trtllm | FlashInferTrtllmNvFp4LinearKernel |" in md
 
 
 def test_the_summary_prints_the_margin_and_the_eligibility_table(tmp_path):

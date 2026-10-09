@@ -5,10 +5,11 @@ from typing import Any
 import pytest
 
 from fp4bench import settings
+from fp4bench.analysis import cells as cl
 from fp4bench.analysis import gates as gt
 from fp4bench.analysis.cells import m1_steps, session_ids
 from fp4bench.analysis.compare import ContrastResult, contrast
-from fp4bench.analysis.inputs import resolve_checkpoint
+from fp4bench.analysis.inputs import resolve_checkpoint, served_args
 from fp4bench.core.types import Cell, Gate, LinearBackend, RatioName, Treatment, Verdict
 from fp4bench.studies import model
 from fp4bench.studies.expb import EXPB
@@ -27,6 +28,7 @@ from tests.analysis_runs import (
     GOOD_REFERENCE,
     H_BATCH,
     SMOKE_CS,
+    TABLE_ARGS,
     TEL,
     aa_results,
     c_build,
@@ -76,7 +78,7 @@ def _gates(
     spec=None,
 ):
     line = typed_manifest(manifest() if manifest_line == "ok" else manifest_line)
-    spec = spec or gt.batch_gate_spec(batches, line)
+    spec = spec or gt.batch_gate_spec(batches, line, served_args(line))
     return gt.gate_report(
         typed_servers(servers),
         typed_m1(m1),
@@ -101,11 +103,12 @@ def test_a_clean_synthetic_run_passes_every_gate():
 
 
 def test_no_sessions_means_no_gate_passes():
-    for spec in (gt.batch_gate_spec((), None), gt.GateSpec(cells=(), m2=False, by_cell=True)):
+    by_cell = gt.GateSpec(cells=(), m2=False, by_cell=True, served_args=TABLE_ARGS)
+    for spec in (gt.batch_gate_spec((), None, TABLE_ARGS), by_cell):
         gates = gt.gate_report([], [], [], None, None, None, spec, gt.AaRatios({}, ()))
         assert tuple(gates) == spec.names
         assert all(g == {"pass": False, "reason": "no sessions"} for g in gates.values())
-    assert Gate.G6B not in gt.GateSpec(cells=(), m2=False, by_cell=True).names
+    assert Gate.G6B not in by_cell.names
 
 
 def test_the_gate_report_flags_a_gpu_change_a_capture_size_and_an_invalid_m2_cell():
@@ -193,13 +196,9 @@ def test_g1_follows_the_recorded_fusion():
     assert _gates(servers, m1, m2, manifest_line=line)[Gate.G1]["pass"] is True
 
 
-@pytest.mark.parametrize("recorded", [None, ("MX", "NV", "MXp")], ids=["no-record", "partial"])
-def test_g1_expects_the_table_of_a_treatment_or_a_manifest_without_recorded_args(recorded):
+def test_g1_expects_the_table_of_a_manifest_without_recorded_args():
     servers, m1, m2 = _five()
-    line = manifest(treatments=FIVE)
-    for t in recorded or ():
-        line = recording_args(line, Treatment(t), model.TREATMENTS[Treatment(t)].server_args)
-    g1 = _gates(servers, m1, m2, manifest_line=line)[Gate.G1]
+    g1 = _gates(servers, m1, m2, manifest_line=manifest(treatments=FIVE))[Gate.G1]
     assert g1["pass"] is True
     assert g1["expected"] == {t: model.TREATMENTS[Treatment(t)].linear_kernel for t in FIVE}
     assert g1["expected_act_quant_fusion"] == {
@@ -219,19 +218,13 @@ def test_a_malformed_record_of_the_server_args_is_refused(recorded):
 
 
 def test_g1_fails_a_treatment_with_no_expected_kernel_or_fusion():
-    servers, m1, m2 = synthetic(1.0)
-    spec = gt.GateSpec(
-        cells=(Cell(8, 1024), Cell(32, 1024)),
-        m2=True,
-        by_cell=False,
-        expected_kernel={
-            t: s.linear_kernel for t, s in model.TREATMENTS.items() if t != Treatment.NVA
-        },
-        expected_fusion={
-            t: s.act_quant_fusion for t, s in model.TREATMENTS.items() if t != Treatment.NVA
-        },
+    servers, _, _ = synthetic(1.0)
+    g1 = gt.g1_kernels(
+        cl.sessions_of(typed_servers(servers)),
+        typed_manifest(manifest()),
+        {t: s.linear_kernel for t, s in model.TREATMENTS.items() if t != Treatment.NVA},
+        {t: s.act_quant_fusion for t, s in model.TREATMENTS.items() if t != Treatment.NVA},
     )
-    g1 = _gates(servers, m1, m2, spec=spec)[Gate.G1]
     assert g1["pass"] is False and g1["expected"]["NVa"] is None
     assert g1["expected_act_quant_fusion"]["NVa"] is None
     assert {m[1] for m in g1["mismatched_sessions"]} == {"NVa"}
@@ -797,7 +790,7 @@ def _c_gates(mutate=None, manifest_line=None, **kw) -> dict:
         line,
         checkpoint,
         source,
-        gt.GateSpec(cells=cells, m2=False, by_cell=True),
+        gt.GateSpec(cells=cells, m2=False, by_cell=True, served_args=served_args(line)),
         gt.AaEffects(effects, AA_EFFECT_MARGIN_MS, AA),
     )
 

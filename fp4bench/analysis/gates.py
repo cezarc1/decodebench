@@ -39,6 +39,7 @@ from fp4bench.core.types import (
     Cell,
     CheckpointKind,
     Gate,
+    LinearKernel,
     NvnfCacheStatus,
     Treatment,
     is_finite,
@@ -53,14 +54,13 @@ GateReport = dict[str, dict[str, Any]]
 
 @dataclass(frozen=True)
 class GateSpec:
-    """What a study's gates check; `by_cell` lists M1 blocks by (C, P), not by batch. Without
-    `expected_kernel` and `expected_fusion`, G1 expects those of the recorded server args."""
+    """What a run's gates check; `by_cell` lists M1 blocks by (C, P), not by batch. G1 expects
+    the kernel and fusion of each treatment's `served_args` (inputs.served_args)."""
 
     cells: tuple[Cell, ...]
     m2: bool
     by_cell: bool
-    expected_kernel: Mapping[Treatment, str] | None = None
-    expected_fusion: Mapping[Treatment, bool] | None = None
+    served_args: Mapping[Treatment, tuple[str, ...]]
 
     @property
     def names(self) -> tuple[Gate, ...]:
@@ -68,11 +68,19 @@ class GateSpec:
 
 
 def batch_gate_spec(
-    batches: Iterable[int], manifest: ManifestLine | None, prompt_len: int = settings.M1_INPUT_LEN
+    batches: Iterable[int],
+    manifest: ManifestLine | None,
+    served_args: Mapping[Treatment, tuple[str, ...]],
+    prompt_len: int = settings.M1_INPUT_LEN,
 ) -> GateSpec:
     """The main run's gates: every batch measured or registered (protocol.concurrencies), M2."""
     expected = sorted(set(batches) | registered_batches(manifest))
-    return GateSpec(cells=tuple(Cell(c, prompt_len) for c in expected), m2=True, by_cell=False)
+    return GateSpec(
+        cells=tuple(Cell(c, prompt_len) for c in expected),
+        m2=True,
+        by_cell=False,
+        served_args=served_args,
+    )
 
 
 @dataclass(frozen=True)
@@ -143,7 +151,7 @@ def nvnf_compile_cache_check(sessions: Sequence[ServerRow]) -> dict[str, Any]:
 def g1_kernels(
     sessions: Sequence[ServerRow],
     manifest: ManifestLine | None,
-    expected_kernel: Mapping[Treatment, str],
+    expected_kernel: Mapping[Treatment, LinearKernel],
     expected_fusion: Mapping[Treatment, bool],
 ) -> dict[str, Any]:
     """Kernel, fusion and compile-cache evidence of every session, and no manifest problems."""
@@ -646,10 +654,9 @@ def gate_report(
         g3_gate = g3_aa_effects(
             g3.effects, any(s.treatment == g3.aa.numer for s in sessions), g3.margin_ms, g3.aa
         )
-    kernel = expected_kernels(manifest) if spec.expected_kernel is None else spec.expected_kernel
-    fusion = expected_fusions(manifest) if spec.expected_fusion is None else spec.expected_fusion
+    served = spec.served_args
     report: GateReport = {
-        Gate.G1: g1_kernels(sessions, manifest, kernel, fusion),
+        Gate.G1: g1_kernels(sessions, manifest, expected_kernels(served), expected_fusions(served)),
         Gate.G2: g2_bytes(sessions, checkpoint, checkpoint_source),
         Gate.G3: g3_gate,
         Gate.G4: (_g4_by_cell(sids, m1) if spec.by_cell else _g4_by_batch(sids, m1, m2)),

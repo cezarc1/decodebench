@@ -216,7 +216,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         manifest,
         checkpoint,
         checkpoint_source,
-        batch_gate_spec(batches, manifest, prompt_len),
+        batch_gate_spec(batches, manifest, data.served_args, prompt_len),
         AaRatios(m1[RatioName.AA], batches),
     )
     skipped = {
@@ -266,7 +266,12 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         scan=None
         if study.kernel_scan is None
         else kernel_scan(
-            step, data.servers, batches, study.kernel_scan, g5b=gates[Gate.G5B], manifest=manifest
+            step,
+            data.servers,
+            batches,
+            study.kernel_scan,
+            served_args=data.served_args,
+            g5b=gates[Gate.G5B],
         ),
         crosscheck=None
         if study.crosscheck is None
@@ -276,6 +281,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         paired_at_primary={c: len(paired_rounds(step, r.numer, r.denom, c)) for c in primary},
         tput=tput,
         per_user=per_user,
+        served_args=data.served_args,
     )
 
 
@@ -339,7 +345,7 @@ def _evaluate_cells(data: RunData, study: Study) -> CellRunResult:
     token, batch = (study.contrast_along(arm).name for arm in (Arm.TOKEN, Arm.BATCH))
     answer = batch_vs_tokens_answer((token, effects[token]), (batch, effects[batch]), rounds)
     repro = cells.get(REPRO_CELL)
-    spec = GateSpec(cells=tuple(expected), m2=False, by_cell=True)
+    spec = GateSpec(cells=tuple(expected), m2=False, by_cell=True, served_args=data.served_args)
     gates = gate_report(
         data.servers,
         data.m1,

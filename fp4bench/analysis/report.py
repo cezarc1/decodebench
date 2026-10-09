@@ -24,6 +24,7 @@ from fp4bench.analysis.results import (
     cell_treatments,
 )
 from fp4bench.analysis.verdicts import Answer, Effect, KernelScan, NvxRatio, Reproduction
+from fp4bench.core.argv import flag_value
 from fp4bench.core.schema import ServerRow
 from fp4bench.core.types import (
     Arm,
@@ -41,7 +42,6 @@ from fp4bench.core.types import (
     Treatment,
     ValueKey,
 )
-from fp4bench.studies import model
 from fp4bench.studies.base import Contrast, Ratio, Study
 from fp4bench.studies.expb import EXPB_PREDICTED_R, EXPB_PREDICTION_C
 from fp4bench.studies.expc import (
@@ -201,12 +201,6 @@ def _experiment_b_section(
     )
 
 
-def _linear_backend(treatment: Treatment) -> str | None:
-    spec = model.TREATMENTS.get(treatment)
-    args = () if spec is None else spec.server_args
-    return args[args.index("--linear-backend") + 1] if "--linear-backend" in args else None
-
-
 def _eligibility_table(scan: KernelScan, spec: KernelScanSpec) -> list[str]:
     sel_c = scan.selection_c
 
@@ -282,7 +276,9 @@ def _margin_text(scan: KernelScan, spec: KernelScanSpec) -> str:
     )
 
 
-def _scan_section(scan: KernelScan, spec: KernelScanSpec) -> str:
+def _scan_section(
+    scan: KernelScan, spec: KernelScanSpec, served_args: Mapping[Treatment, tuple[str, ...]]
+) -> str:
     legend = []
     for t in scan.treatments:
         match = scan.kernel_matches[t]
@@ -296,7 +292,8 @@ def _scan_section(scan: KernelScan, spec: KernelScanSpec) -> str:
             else KernelMatch.MISMATCH
         )
         legend.append(
-            f"| {t} | {_linear_backend(t) or 'none'} | {scan.expected_kernels[t]} | "
+            f"| {t} | {flag_value(served_args[t], '--linear-backend') or 'none'} | "
+            f"{scan.expected_kernels[t]} | "
             f"{', '.join(scan.observed_kernels[t]) or 'none'} | {state} |"
         )
     wrong = [
@@ -687,7 +684,7 @@ def batch_summary(res: BatchRunResult) -> str:
         *([_experiment_b_section(m1[RatioName.R], primary, kv_dtype)] if expb else []),
         *([SMOKE_NOTE, ""] if scan or cross is not None else []),
         *([_failed_sessions_section(res.failed)] if res.failed else []),
-        *([_scan_section(scan, spec)] if scan and spec else []),
+        *([_scan_section(scan, spec, res.served_args)] if scan and spec else []),
         *([_crosscheck_section(cross, check)] if cross is not None and check else []),
         *m1_tables,
         _decomposition_section(res.r_f_phi, res.study.ratio(RatioName.F)),

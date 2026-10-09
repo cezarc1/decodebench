@@ -26,7 +26,6 @@ from fp4bench.core.types import (
     Verdict,
     is_finite,
 )
-from fp4bench.studies import model
 from fp4bench.studies.base import Ratio
 from fp4bench.studies.expc import MAIN_RUN_R_BATCH1, REPRO_CELL, REPRO_TOL
 from fp4bench.studies.kernel_scan import Crosscheck, KernelScanSpec
@@ -261,7 +260,7 @@ class KernelScan:
     selection_c: int
     median_step_s: dict[Treatment, dict[int, float]]
     ratio_to_nv: dict[Treatment, dict[int, float]]
-    expected_kernels: dict[Treatment, LinearKernel | None]
+    expected_kernels: dict[Treatment, LinearKernel]
     observed_kernels: dict[Treatment, list[str]]
     kernel_matches: dict[Treatment, bool | None]
     failed: list[Treatment]
@@ -292,11 +291,12 @@ def kernel_scan(
     servers: Sequence[ServerRow],
     batches: Sequence[int],
     spec: KernelScanSpec,
+    *,
+    served_args: Mapping[Treatment, tuple[str, ...]],
     g5b: Mapping | None = None,
-    manifest: ManifestLine | None = None,
 ) -> KernelScan | None:
     """The NVa rule (`spec`, METHODOLOGY.md#nv-alt); None for a run without a scan treatment.
-    Each treatment is expected to run the kernel of the server args `manifest` records."""
+    Each treatment is expected to run the kernel of its `served_args` (inputs.served_args)."""
     sessions = sessions_of(servers)
     scan = spec.treatments
     failed_by: dict[Treatment, ServerRow] = {}
@@ -319,8 +319,8 @@ def kernel_scan(
     ratio = {
         t: {c: m / nv_median[c] for c, m in median[t].items() if c in nv_median} for t in treatments
     }
-    kernels = expected_kernels(manifest)
-    expected = {t: kernels.get(t) for t in treatments}
+    kernels = expected_kernels(served_args)
+    expected = {t: kernels[t] for t in treatments}
     cute_dsl_kernel = LinearBackend.FLASHINFER_CUTEDSL.kernel
     observed = {
         t: sorted({k for s in sessions if s.treatment == t for k in s.linear_kernels or []})
@@ -329,11 +329,7 @@ def kernel_scan(
     matches: dict[Treatment, bool | None] = {}
     for t in treatments:
         mine = [s for s in sessions if s.treatment == t]
-        matches[t] = (
-            None
-            if not mine
-            else (expected[t] is not None and all(s.linear_kernels == [expected[t]] for s in mine))
-        )
+        matches[t] = None if not mine else all(s.linear_kernels == [expected[t]] for s in mine)
     nll = {t: mean_nll(sessions, t) for t in treatments}
     nv_nll = nll[reference]
     eligibility = {}
@@ -426,7 +422,7 @@ def kernel_scan(
         margin=margin,
         selected=selected,
         selected_kernel=expected[selected] if selected else None,
-        selected_server_args=model.TREATMENTS[selected].server_args if selected else None,
+        selected_server_args=served_args[selected] if selected else None,
         reason=None
         if selected
         else (

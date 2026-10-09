@@ -1,7 +1,9 @@
 """What a run directory recorded: typed rows, the last manifest line, the checkpoint report."""
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +38,10 @@ class RunData:
     def checkpoint(self) -> tuple[dict | None, str | None]:
         return resolve_checkpoint(self.run_dir, self.manifest)
 
+    @cached_property
+    def served_args(self) -> dict[Treatment, tuple[str, ...]]:
+        return served_args(self.manifest)
+
 
 def load_run(run_dir: Path) -> RunData:
     """The run's rows; a row of an uncounted session that does not load is left out."""
@@ -62,12 +68,12 @@ def inputs(manifest: ManifestLine | None) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def recorded_server_args(manifest: ManifestLine | None) -> dict[Treatment, tuple[str, ...]]:
-    """inputs.treatment_server_args: the args each treatment of the run was served with; none in
-    a manifest from before the record."""
+def served_args(manifest: ManifestLine | None) -> dict[Treatment, tuple[str, ...]]:
+    """The args each treatment was served with: inputs.treatment_server_args of the last manifest
+    line, and model.TREATMENTS' for a treatment it does not record."""
     recorded = inputs(manifest).get("treatment_server_args")
     if recorded is None:
-        return {}
+        recorded = {}
     if not (
         isinstance(recorded, dict)
         and all(t in Treatment for t in recorded)
@@ -80,28 +86,22 @@ def recorded_server_args(manifest: ManifestLine | None) -> dict[Treatment, tuple
             f"inputs.treatment_server_args of the last manifest line is not a list of strings "
             f"per treatment: {recorded!r}"
         )
-    return {Treatment(t): tuple(args) for t, args in recorded.items()}
-
-
-def expected_kernels(manifest: ManifestLine | None) -> dict[Treatment, LinearKernel]:
-    """The kernel class each treatment's recorded server args select; model.TREATMENTS' for a
-    treatment the manifest does not record."""
-    recorded = recorded_server_args(manifest)
     return {
-        t: model.expected_linear_kernel(t, recorded[t]) if t in recorded else spec.linear_kernel
+        t: tuple(recorded[t]) if t in recorded else spec.server_args
         for t, spec in model.TREATMENTS.items()
     }
 
 
-def expected_fusions(manifest: ManifestLine | None) -> dict[Treatment, bool]:
-    """Whether each treatment's recorded server args fuse the activation quantization;
-    model.TREATMENTS' for a treatment the manifest does not record."""
-    recorded = recorded_server_args(manifest)
+def expected_kernels(served: Mapping[Treatment, tuple[str, ...]]) -> dict[Treatment, LinearKernel]:
+    """The linear kernel class each treatment's served args select."""
+    return {t: model.expected_linear_kernel(t, args) for t, args in served.items()}
+
+
+def expected_fusions(served: Mapping[Treatment, tuple[str, ...]]) -> dict[Treatment, bool]:
+    """Whether each treatment's served args fuse the activation quantization."""
     return {
-        t: model.expected_act_quant_fusion(t, recorded[t]) is ActQuantFusion.ON
-        if t in recorded
-        else spec.act_quant_fusion
-        for t, spec in model.TREATMENTS.items()
+        t: model.expected_act_quant_fusion(t, args) is ActQuantFusion.ON
+        for t, args in served.items()
     }
 
 
