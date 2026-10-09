@@ -1,0 +1,278 @@
+[project]
+name = "fp4bench"
+version = "0.1.0"
+description = "NVFP4 against MXFP4 decode throughput benchmark"
+requires-python = ">=3.12"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "aiohttp>=3.9",
+    "click>=8.1",
+    "matplotlib>=3.8",
+    "modal==1.4.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+]
+
+[project.urls]
+Repository = "https://github.com/cezarc1/decodebench"
+
+[project.scripts]
+fp4bench = "fp4bench.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-xdist>=3.8", "pyright[nodejs]==1.1.414", "ruff==0.16.10", "ty==0.0.85"]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["fp4bench*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.format]
+# The plans and notes under docs/ quote code as it was when they were written.
+exclude = ["docs/**"]
+
+[tool.ruff.lint]
+# Not selected, on purpose: D (the goal is fewer docstrings; METHODOLOGY pointers stay by policy),
+# COM (the formatter's job), EM (`msg = ...; raise X(msg)` would add boilerplate to every precise
+# message), ERA (false positives on METHODOLOGY.md#anchor pointers), T20 (deliberate stderr
+# warnings and log lines), CPY (no copyright headers).
+select = [
+    "F",     # pyflakes: undefined names, unused imports
+    "E",     # pycodestyle errors, line length 100
+    "W",     # pycodestyle warnings
+    "I",     # import order
+    "N",     # pep8 naming
+    "UP",    # 3.12 idioms: datetime.UTC, collections.abc, PEP 695 type parameters
+    "ANN",   # every signature typed: the milestone's goal
+    "ASYNC", # blocking calls in async code
+    "S",     # bandit: asserts in library code, shell=True, unsafe deserialization, weak hashes
+    "BLE",   # blind excepts: the deliberate probes go through one probe()
+    "FBT",   # boolean positional parameters switch shape or semantics
+    "B",     # bugbear: zip(strict=), loop variables in closures, calls in defaults
+    "A",     # shadowed builtins
+    "C4",    # comprehensions
+    "DTZ",   # naive datetimes
+    "T10",   # leftover debugger calls
+    "EXE",   # shebangs and executable bits
+    "ISC",   # implicit string concatenation on one line
+    "ICN",   # conventional import aliases (mpl, np)
+    "LOG",   # logging misuse
+    "G",     # logging format strings
+    "PIE",   # unnecessary statements
+    "PYI",   # typing idioms: -> Self
+    "PT",    # pytest idioms: raises(match=), fixtures
+    "RSE",   # raise without call parentheses
+    "RET",   # return statements
+    "SLF",   # private members of other objects
+    "SLOT",  # __slots__ on str and tuple subclasses
+    "SIM",   # simplifications
+    "TID",   # banned and relative imports
+    "TC",    # imports needed only for typing
+    "INT",   # gettext
+    "ARG",   # unused arguments
+    "PTH",   # pathlib over os.path and open()
+    "PGH",   # blanket noqa and type: ignore
+    "PL",    # pylint: complexity and argument limits
+    "TRY",   # exception hygiene
+    "FLY",   # static joins
+    "NPY",   # numpy legacy APIs
+    "PERF",  # avoidable loop overhead
+    "FURB",  # modern stdlib idioms
+    "RUF",   # ruff's own rules, including unused noqa (RUF100)
+    "C90",   # mccabe cyclomatic complexity
+]
+ignore = [
+    "TRY003",  # precise exception messages are the house style
+    "TRY004",  # ValueError is a contract: the CLI turns it into a ClickException, tests assert it
+    "PLR2004", # magic values: HTTP 200, column widths; protocol constants are named in settings
+    "ISC004",  # implicit concatenation in markdown line lists is deliberate
+    "RUF001",  # ×, −, µ, Φ and ≈ are deliberate in rendered strings,
+    "RUF002",  # docstrings
+    "RUF003",  # and comments
+    "S311",    # random.Random is seeded for reproducible shuffles, never for secrets
+    "S603",    # subprocess argv is literal: nvidia-smi, git, vllm
+    "S607",    # and those executables are found on PATH by design
+    "S310",    # urlopen only reaches the local vLLM server
+    "FBT003",  # boolean positional values in third-party calls (matplotlib, flashinfer)
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10 # 8 from phase 10
+
+[tool.ruff.lint.pylint]
+max-args = 6
+max-positional-args = 4 # keyword-only calls document themselves
+max-branches = 12
+max-statements = 50
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fp4bench.core.schema.absent", "fp4bench.studies.base.ServerSettings"]
+
+# Only the Modal image installs these: fp4bench/gpu/ imports them at module top, nothing else does.
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"torch".msg = "container-only: import it under fp4bench/gpu/"
+"vllm".msg = "container-only: import it under fp4bench/gpu/"
+"flashinfer".msg = "container-only: import it under fp4bench/gpu/"
+"transformers".msg = "container-only: import it under fp4bench/gpu/"
+"llmcompressor".msg = "container-only: import it under fp4bench/gpu/"
+"datasets".msg = "container-only: import it under fp4bench/gpu/"
+"huggingface_hub".msg = "container-only: import it under fp4bench/gpu/"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # pytest asserts
+    "ANN",     # fixtures and test functions stay unannotated
+    "ARG",     # fakes mirror the signatures they replace,
+    "FBT",     # including their boolean parameters
+    "SLF001",  # tests reach into private helpers
+    "PT006",   # "a, b" parametrize names are the house style
+    "PT018",   # composite asserts read as one claim
+    "FLY002",  # log fixtures are built as lists of lines
+    "C901",    # the complexity and argument limits are for the library
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PLR0917",
+    "PLC0415", # a test imports what it fakes or patches once the fake is in place
+]
+"fp4bench/cli.py" = ["PLR0913", "PLR0917"] # Click maps options to parameters
+"fp4bench/gpu/**" = ["TID251"]             # the one package that imports the container stack
+
+# ==================================================================================================
+# TEMPORARY: the typing milestone's ratchet.
+# Each phase deletes the rules it closes, as noted per entry; phase 10 deletes this table.
+# Never add to it: new code meets the full rule set.
+# ==================================================================================================
+[tool.ruff.lint.extend-per-file-ignores]
+"fp4bench/runner.py" = [
+    "ANN001", "ANN202",           # phase 3
+    "FBT001", "FBT002",           # phase 3: Severity
+    "PLR0913", "PLR0917",         # phase 3: SessionInputs
+    "C901", "PLR0912", "PLR0915", # phase 3: decompose run_experiment
+]
+"fp4bench/server.py" = [
+    "ANN001", "ANN002", "ANN204", # phase 3
+    "PLR0913", "PLR0917",         # phase 3: ServerLaunch
+    "C901",                       # phase 3: decompose parse_server_log
+]
+"fp4bench/decode_step.py" = ["FBT001", "FBT002", "PLR0917"]   # phase 3: StepWindow, M1Protocol
+"fp4bench/lib_bench.py" = ["ANN001"]                          # phase 3
+"fp4bench/telemetry.py" = ["ANN001", "ANN204"]                # phase 3
+"fp4bench/wave.py" = ["PLR0917"]                              # phase 3
+"fp4bench/analysis/cells.py" = ["FBT001", "FBT002"]           # phase 4: layout from the variant
+"fp4bench/studies/expc.py" = ["FBT001", "PLR0913", "PLR0917"] # phase 4: replace(EXPC, ...)
+"fp4bench/analysis/compare.py" = ["FBT001", "PLR0917"]        # phase 5: a to_json per shape
+"fp4bench/analysis/figures.py" = [
+    "ANN401",                                 # phase 5: matplotlib types
+    "FBT001", "FBT002", "PLR0913", "PLR0917", # phase 5: SeriesStyle
+    "PLC0415",                                # phase 5: matplotlib at module top
+]
+"fp4bench/analysis/gates.py" = ["FBT001", "PLR0913", "PLR0917"] # phase 5: GateInputs
+"fp4bench/analysis/plots.py" = [
+    "ANN401", "PLR0917", "S101", # phase 5: typed results
+    "PLC0415",                   # phase 5: matplotlib at module top
+]
+"fp4bench/analysis/report.py" = ["FBT001", "FBT002", "PLR0917"] # phase 5: IdealColumn
+"fp4bench/analysis/results.py" = [
+    "ANN401", "FBT001", "FBT002", # phase 5: to_json replaces plain and jsonable
+    "PLR0911",                    # phase 5: plain() goes
+]
+"fp4bench/analysis/verdicts.py" = [
+    "FBT001", "PLR0917",          # phase 5: the G3 gate and the Schedule passed in
+    "C901", "PLR0912", "PLR0915", # phase 5: decompose kernel_scan
+]
+"fp4bench/profiling.py" = [
+    "ANN001", "ANN202",   # phase 7
+    "BLE001",             # phase 7: probe(), recorded session errors
+    "PLR0913", "PLR0917", # phase 7: ProfileIO, ProfileTimeouts
+    "PLC0415",            # phase 7: imports at module top
+]
+"fp4bench/prep.py" = [
+    "ANN001", "FBT001", "FBT002", "PLR0917", # phase 8
+    "S101",                                  # phase 8: a typed record
+    "PLC0415", "TID251",                     # phase 8: the hub and tokenizer code moves to gpu/
+]
+"fp4bench/prompts.py" = [
+    "ANN001", "PLR0913", "PLR0917", # phase 8: PromptSpec, M1Reuse
+    "C901",                         # phase 8: decompose build_cell_prompt_sets
+]
+"fp4bench/publish.py" = [
+    "FBT001",            # phase 8: keyword-only
+    "PLC0415", "TID251", # phase 8: the Hub upload moves to fp4bench/gpu/
+]
+"fp4bench/quantize.py" = [
+    "ANN001", "PLR0917", # phase 8
+    "PLR0915",           # phase 8: decompose quantize
+    "PLC0415", "TID251", # phase 8: the quantization moves to fp4bench/gpu/
+]
+"fp4bench/sanity.py" = [
+    "ANN001",                     # phase 8
+    "S101",                       # phase 8: a typed QuantizationConfig
+    "C901", "PLR0912", "PLR0915", # phase 8: decompose check_structure
+]
+"fp4bench/cli.py" = [
+    "ANN202", "ANN401", "FBT001", # phase 9: keyword-only commands
+    "PLC0415",                    # phase 9: imports at module top
+]
+"fp4bench/executors/local.py" = [
+    "PLR0917", # phase 9: RunRequest
+    "PLC0415", # phase 9: imports at module top
+]
+"fp4bench/executors/modal.py" = [
+    "ANN401", "FBT001", "FBT002", "PLR0917", # phase 9: RunRequest
+    "BLE001",                                # phase 9: typed executor results
+    "PLC0415",                               # phase 9: fp4bench.gpu under `with image.imports()`
+]
+"fp4bench/manifest.py" = ["PLC0415", "TID251"] # phase 3: the CUDA probe moves to fp4bench/gpu/
+
+[tool.pyright]
+include = ["fp4bench", "tests"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+# typings/ declares the modules only the Modal image installs; their sources are never local.
+stubPath = "typings"
+reportMissingModuleSource = "none"
+# Fully typed: every rule on, no Any but the container-only stack's (typings/), named where it flows.
+strict = ["fp4bench/microbench.py", "fp4bench/gpu", "fp4bench/core/kernels.py"]
+
+# ty runs alongside pyright. No diagnostic beyond tests/ty_baseline.txt, a ratchet that
+# only shrinks (tests/ty_baseline.py; CI and tests/test_ty_baseline.py check it); 0 by phase 10.
+[tool.ty.environment]
+python-version = "3.12"
+python = ".venv"
+python-platform = "linux" # CI and the Modal image: one baseline on every machine
+extra-paths = ["typings"] # the stubs pyright reads too (stubPath)
+
+[tool.ty.src]
+include = ["fp4bench", "tests"]
+
+[tool.ty.rules]
+# Off by default and clean today: they guard regressions.
+possibly-unresolved-reference = "error"
+possibly-missing-attribute = "error"
+possibly-missing-import = "error"
+missing-override-decorator = "error"
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+# Turned on by the typing phases: truthiness-test-of-none-union, unsound-return-statement,
+# missing-type-argument.
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+invalid-argument-type = "warn" # dict fixtures splatted into typed constructors, until phase 6

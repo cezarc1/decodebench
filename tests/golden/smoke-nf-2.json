@@ -1,0 +1,215 @@
+{
+ "aa": {},
+ "accuracy": {
+  "bf16": 1.7729928782209754,
+  "mx": 1.9091719557356064,
+  "n_windows": 64,
+  "nv": 1.8238470908679751,
+  "nv_minus_mx": {
+   "hi": -0.07439433979901167,
+   "level": 0.95,
+   "lo": -0.09646558518713103,
+   "mean": -0.08532486486763127,
+   "resamples": 10000,
+   "seed": 0
+  },
+  "problems": [],
+  "reference_run": null
+ },
+ "effective_bandwidth": {
+  "MX": {
+   "1": {
+    "bytes": 18570018816.0,
+    "bytes_per_s": 2932493146137.9087,
+    "format": "mxfp4",
+    "fraction_of_peak": 0.3665616432672386,
+    "rounds": 1,
+    "step_s": 0.006332502035156229
+   },
+   "128": {
+    "bytes": 73968386048.0,
+    "bytes_per_s": 4914972189729.555,
+    "format": "mxfp4",
+    "fraction_of_peak": 0.6143715237161943,
+    "rounds": 1,
+    "step_s": 0.01504960418750001
+   },
+   "32": {
+    "bytes": 32092454912.0,
+    "bytes_per_s": 3809969425991.826,
+    "format": "mxfp4",
+    "fraction_of_peak": 0.47624617824897825,
+    "rounds": 1,
+    "step_s": 0.008423284106445439
+   }
+  },
+  "NV": {
+   "1": {
+    "bytes": 19545194496.0,
+    "bytes_per_s": 3365788947205.008,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.420723618400626,
+    "rounds": 1,
+    "step_s": 0.005807017255859304
+   },
+   "128": {
+    "bytes": 74943561728.0,
+    "bytes_per_s": 4926314989468.906,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.6157893736836133,
+    "rounds": 1,
+    "step_s": 0.015212904958007867
+   },
+   "32": {
+    "bytes": 33067630592.0,
+    "bytes_per_s": 4133814384252.6514,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.5167267980315814,
+    "rounds": 1,
+    "step_s": 0.007999302222656102
+   }
+  },
+  "NVnf": {
+   "1": {
+    "bytes": 19545194496.0,
+    "bytes_per_s": 3335784760466.1973,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.4169730950582747,
+    "rounds": 1,
+    "step_s": 0.005859249291992219
+   },
+   "128": {
+    "bytes": 74943561728.0,
+    "bytes_per_s": 4910896362178.93,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.6138620452723662,
+    "rounds": 1,
+    "step_s": 0.01526066856250008
+   },
+   "32": {
+    "bytes": 33067630592.0,
+    "bytes_per_s": 4072215025292.5566,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.5090268781615696,
+    "rounds": 1,
+    "step_s": 0.00812030562890631
+   }
+  }
+ },
+ "experiment": "main",
+ "failed_sessions": [],
+ "gate_line": "gates: G1 pass \u00b7 G2 pass \u00b7 G3 FAIL \u00b7 G4 pass \u00b7 G5a pass \u00b7 G5b pass \u00b7 G6a pass \u00b7 G6b pass \u00b7 G7 pass",
+ "gates": {
+  "G1_kernels": true,
+  "G2_bytes": true,
+  "G3_aa": false,
+  "G4_env_throttle": true,
+  "G5a_structure": true,
+  "G5b_nll": true,
+  "G6a_integrity": true,
+  "G6b_m2_validity": true,
+  "G7_same_gpu_per_round": true
+ },
+ "hypothesis_reading": null,
+ "interpretable": false,
+ "kernel_scan": null,
+ "kv_cache_dtype": "bfloat16",
+ "kv_cache_dtype_note": null,
+ "m1": {},
+ "m1_d": {},
+ "m1_f": {},
+ "m1_k": {},
+ "m1_phi": {},
+ "m1_r_f_phi": {},
+ "m2_aa": {},
+ "m2_d": {},
+ "m2_f": {},
+ "m2_itl": {},
+ "m2_itl_d": {},
+ "m2_itl_f": {},
+ "m2_itl_k": {},
+ "m2_itl_phi": {},
+ "m2_k": {},
+ "m2_phi": {},
+ "m2_throughput": {},
+ "nonblocking_failed": [],
+ "nvx_crosscheck": null,
+ "order_effect": {
+  "MX": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.006335512032226598,
+    "n2": 0.006331716704589874,
+    "n2_over_n1": 0.999400943819944
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.014969277561523442,
+    "n2": 0.015051363431640652,
+    "n2_over_n1": 1.005483622691866
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.008424748833007811,
+    "n2": 0.00841169354736332,
+    "n2_over_n1": 0.9984503650015841
+   }
+  },
+  "NV": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.005807017255859304,
+    "n2": 0.005806735659667939,
+    "n2_over_n1": 0.9999515076021032
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015217333602539185,
+    "n2": 0.015172386899902413,
+    "n2_over_n1": 0.9970463483412578
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.007964944437499843,
+    "n2": 0.008038592089355312,
+    "n2_over_n1": 1.0092464740254468
+   }
+  },
+  "NVnf": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.005859123457031323,
+    "n2": 0.005860702360351633,
+    "n2_over_n1": 1.0002694777353454
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015304623319335686,
+    "n2": 0.015223105655273406,
+    "n2_over_n1": 0.9946736576025826
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.008172598580078017,
+    "n2": 0.008118372693359244,
+    "n2_over_n1": 0.9933649149426038
+   }
+  }
+ },
+ "primary_concurrencies": [
+  8,
+  32,
+  128
+ ],
+ "skipped": {},
+ "verdict": "incomplete (0/1 rounds; a CI needs at least 2)"
+}

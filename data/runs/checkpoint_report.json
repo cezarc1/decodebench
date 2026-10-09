@@ -1,0 +1,12 @@
+{
+  "mx_quantized_bytes": 16577986560,
+  "nv_quantized_bytes": 17553164032,
+  "nv_over_mx": 1.058823637506918,
+  "expected_nv_over_mx": 1.0588235294117647,
+  "mx_quant_format": "mxfp4-pack-quantized",
+  "nv_quant_format": "nvfp4-pack-quantized",
+  "nv_has_activation_scales": true,
+  "config_diff": {},
+  "mx_problems": [],
+  "nv_problems": []
+}

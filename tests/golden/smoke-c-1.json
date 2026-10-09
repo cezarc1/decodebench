@@ -1,0 +1,547 @@
+{
+ "aa_effects": {
+  "E_batch,AA": {
+   "cells": [
+    [
+     128,
+     360
+    ],
+    [
+     1,
+     127360
+    ]
+   ],
+   "classification": null,
+   "hi_ms": null,
+   "lo_ms": null,
+   "mean_ms": null,
+   "missing_cells": [
+    [
+     128,
+     360
+    ],
+    [
+     1,
+     127360
+    ]
+   ],
+   "n_rounds": 0,
+   "per_round_ms": {},
+   "rounds": []
+  },
+  "E_tok,AA": {
+   "cells": [
+    [
+     1,
+     127360
+    ],
+    [
+     1,
+     1024
+    ]
+   ],
+   "classification": null,
+   "hi_ms": null,
+   "lo_ms": null,
+   "mean_ms": null,
+   "missing_cells": [
+    [
+     1,
+     127360
+    ],
+    [
+     1,
+     1024
+    ]
+   ],
+   "n_rounds": 0,
+   "per_round_ms": {},
+   "rounds": []
+  }
+ },
+ "answer": "incomplete (1/1 rounds; a CI needs at least 2)",
+ "cells": [
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "token"
+   ],
+   "c": 1,
+   "delta_aa_ms": null,
+   "delta_ms": {
+    "hi_ms": null,
+    "lo_ms": null,
+    "mean_ms": 0.41378876074205095,
+    "n_rounds": 1,
+    "per_round_ms": {
+     "0": 0.41378876074205095
+    },
+    "rounds": [
+     0
+    ]
+   },
+   "kv_tokens_mean": 1664,
+   "p": 1024,
+   "r": {
+    "hi": null,
+    "lo": null,
+    "n_rounds": 1,
+    "ratio": 0.9343437036581964,
+    "rounds": [
+     0
+    ],
+    "verdict": null
+   },
+   "t_ms": {
+    "MX": 6.302346976562401,
+    "MXp": null,
+    "NV": 5.88855821582035
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "token"
+   ],
+   "c": 1,
+   "delta_aa_ms": null,
+   "delta_ms": null,
+   "kv_tokens_mean": 4736,
+   "p": 4096,
+   "r": null,
+   "t_ms": {
+    "MX": null,
+    "MXp": null,
+    "NV": null
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "token"
+   ],
+   "c": 1,
+   "delta_aa_ms": null,
+   "delta_ms": null,
+   "kv_tokens_mean": 17024,
+   "p": 16384,
+   "r": null,
+   "t_ms": {
+    "MX": null,
+    "MXp": null,
+    "NV": null
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "token"
+   ],
+   "c": 1,
+   "delta_aa_ms": null,
+   "delta_ms": {
+    "hi_ms": null,
+    "lo_ms": null,
+    "mean_ms": 0.4047385322265562,
+    "n_rounds": 1,
+    "per_round_ms": {
+     "0": 0.4047385322265562
+    },
+    "rounds": [
+     0
+    ]
+   },
+   "kv_tokens_mean": 33408,
+   "p": 32768,
+   "r": {
+    "hi": null,
+    "lo": null,
+    "n_rounds": 1,
+    "ratio": 0.9460947655512407,
+    "rounds": [
+     0
+    ],
+    "verdict": null
+   },
+   "t_ms": {
+    "MX": 7.5083345126953915,
+    "MXp": null,
+    "NV": 7.103595980468835
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "token"
+   ],
+   "c": 1,
+   "delta_aa_ms": null,
+   "delta_ms": null,
+   "kv_tokens_mean": 66176,
+   "p": 65536,
+   "r": null,
+   "t_ms": {
+    "MX": null,
+    "MXp": null,
+    "NV": null
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "token",
+    "batch"
+   ],
+   "c": 1,
+   "delta_aa_ms": null,
+   "delta_ms": {
+    "hi_ms": null,
+    "lo_ms": null,
+    "mean_ms": 0.40056237402352757,
+    "n_rounds": 1,
+    "per_round_ms": {
+     "0": 0.40056237402352757
+    },
+    "rounds": [
+     0
+    ]
+   },
+   "kv_tokens_mean": 128000,
+   "p": 127360,
+   "r": {
+    "hi": null,
+    "lo": null,
+    "n_rounds": 1,
+    "ratio": 0.9631264646372706,
+    "rounds": [
+     0
+    ],
+    "verdict": null
+   },
+   "t_ms": {
+    "MX": 10.86313992089849,
+    "MXp": null,
+    "NV": 10.462577546874963
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "batch"
+   ],
+   "c": 8,
+   "delta_aa_ms": null,
+   "delta_ms": null,
+   "kv_tokens_mean": 128000,
+   "p": 15360,
+   "r": null,
+   "t_ms": {
+    "MX": null,
+    "MXp": null,
+    "NV": null
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "batch"
+   ],
+   "c": 32,
+   "delta_aa_ms": null,
+   "delta_ms": null,
+   "kv_tokens_mean": 128000,
+   "p": 3360,
+   "r": null,
+   "t_ms": {
+    "MX": null,
+    "MXp": null,
+    "NV": null
+   }
+  },
+  {
+   "aa": null,
+   "aa_ratio_rule": null,
+   "arms": [
+    "batch"
+   ],
+   "c": 128,
+   "delta_aa_ms": null,
+   "delta_ms": {
+    "hi_ms": null,
+    "lo_ms": null,
+    "mean_ms": -0.07119092382823489,
+    "n_rounds": 1,
+    "per_round_ms": {
+     "0": -0.07119092382823489
+    },
+    "rounds": [
+     0
+    ]
+   },
+   "kv_tokens_mean": 128000,
+   "p": 360,
+   "r": {
+    "hi": null,
+    "lo": null,
+    "n_rounds": 1,
+    "ratio": 1.0060211227505351,
+    "rounds": [
+     0
+    ],
+    "verdict": null
+   },
+   "t_ms": {
+    "MX": 11.823529726562532,
+    "MXp": null,
+    "NV": 11.894720650390767
+   }
+  }
+ ],
+ "config_reproduction": {
+  "cell": [
+   1,
+   1024
+  ],
+  "difference": 0.0003437036581963593,
+  "hi": null,
+  "lo": null,
+  "n_rounds": 1,
+  "r": 0.9343437036581964,
+  "status": "pass",
+  "target": 0.934,
+  "tolerance": 0.01
+ },
+ "design": {
+  "cells": [
+   [
+    1,
+    1024
+   ],
+   [
+    1,
+    32768
+   ],
+   [
+    1,
+    127360
+   ],
+   [
+    128,
+    360
+   ]
+  ],
+  "kind": "a subset of the cells (smoke)",
+  "missing_registered_cells": [
+   [
+    1,
+    4096
+   ],
+   [
+    1,
+    16384
+   ],
+   [
+    1,
+    65536
+   ],
+   [
+    8,
+    15360
+   ],
+   [
+    32,
+    3360
+   ]
+  ],
+  "problems": [],
+  "registered_cells": [
+   [
+    1,
+    1024
+   ],
+   [
+    1,
+    4096
+   ],
+   [
+    1,
+    16384
+   ],
+   [
+    1,
+    32768
+   ],
+   [
+    1,
+    65536
+   ],
+   [
+    1,
+    127360
+   ],
+   [
+    8,
+    15360
+   ],
+   [
+    32,
+    3360
+   ],
+   [
+    128,
+    360
+   ]
+  ],
+  "server_argv": {
+   "problems": [],
+   "sessions_checked": 2
+  },
+  "unregistered_cells": []
+ },
+ "effects": {
+  "E_batch": {
+   "cells": [
+    [
+     128,
+     360
+    ],
+    [
+     1,
+     127360
+    ]
+   ],
+   "classification": null,
+   "hi_ms": null,
+   "lo_ms": null,
+   "mean_ms": -0.47175329785176245,
+   "missing_cells": [],
+   "n_rounds": 1,
+   "per_round_ms": {
+    "0": -0.47175329785176245
+   },
+   "rounds": [
+    0
+   ]
+  },
+  "E_tok": {
+   "cells": [
+    [
+     1,
+     127360
+    ],
+    [
+     1,
+     1024
+    ]
+   ],
+   "classification": null,
+   "hi_ms": null,
+   "lo_ms": null,
+   "mean_ms": -0.013226386718523386,
+   "missing_cells": [],
+   "n_rounds": 1,
+   "per_round_ms": {
+    "0": -0.013226386718523386
+   },
+   "rounds": [
+    0
+   ]
+  }
+ },
+ "extension_note": null,
+ "failed_sessions": [],
+ "gate_line": "gates: G1 pass \u00b7 G2 pass \u00b7 G3 FAIL \u00b7 G4 pass \u00b7 G5a pass \u00b7 G5b pass \u00b7 G6a pass \u00b7 G7 pass",
+ "gates": {
+  "G1_kernels": true,
+  "G2_bytes": true,
+  "G3_aa": false,
+  "G4_env_throttle": true,
+  "G5a_structure": true,
+  "G5b_nll": true,
+  "G6a_integrity": true,
+  "G7_same_gpu_per_round": true
+ },
+ "interpretable": false,
+ "nll_crosscheck": {
+  "main_run": "results/full-1",
+  "per_treatment": {
+   "MX": {
+    "main_run": 1.9092,
+    "sessions": 1,
+    "this": 1.9091719557356064,
+    "this_minus_main": -2.8044264393622953e-05
+   },
+   "NV": {
+    "main_run": 1.8238,
+    "sessions": 1,
+    "this": 1.8238470908679751,
+    "this_minus_main": 4.7090867975052575e-05
+   }
+  },
+  "windows": "the main run's"
+ },
+ "predictions": {
+  "delta_ms": {
+   "H_batch": {
+    "C=1,P=1024": 0.42,
+    "C=1,P=127360": 0.42,
+    "C=1,P=16384": 0.42,
+    "C=1,P=32768": 0.42,
+    "C=1,P=4096": 0.42,
+    "C=1,P=65536": 0.42,
+    "C=128,P=360": -0.19,
+    "C=32,P=3360": 0.32,
+    "C=8,P=15360": 0.49
+   },
+   "H_tokens": {
+    "C=1,P=1024": 0.42,
+    "C=1,P=127360": 0.07,
+    "C=128,P=360": 0.07,
+    "C=32,P=3360": 0.07,
+    "C=8,P=15360": 0.07
+   }
+  },
+  "effects_ms": {
+   "H_batch": {
+    "E_batch": -0.6,
+    "E_tok": 0.0
+   },
+   "H_tokens": {
+    "E_batch": 0.0,
+    "E_tok": -0.35
+   }
+  },
+  "main_run_delta_ms": {
+   "1": 0.42,
+   "128": -0.19,
+   "32": 0.32,
+   "64": 0.14,
+   "8": 0.49
+  },
+  "r": {
+   "H_batch": {
+    "C=1,P=1024": 0.93,
+    "C=1,P=127360": 0.97,
+    "C=1,P=16384": 0.94,
+    "C=1,P=32768": 0.95,
+    "C=1,P=4096": 0.934,
+    "C=1,P=65536": 0.96,
+    "C=128,P=360": "> 1"
+   },
+   "H_tokens": {
+    "C=1,P=127360": 0.99
+   }
+  }
+ },
+ "registered_rounds": 1,
+ "run": "smoke-c-1",
+ "skipped": []
+}

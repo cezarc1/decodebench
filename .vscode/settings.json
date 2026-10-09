@@ -1,0 +1,25 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "python.languageServer": "None",
+  "python.analysis.typeCheckingMode": "off",
+
+  "ty.importStrategy": "fromEnvironment",
+
+  "ruff.importStrategy": "fromEnvironment",
+  "ruff.configurationPreference": "filesystemFirst",
+  "ruff.nativeServer": "on",
+  "ruff.lint.enable": true,
+
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  "isort.check": false,
+  "black-formatter.enabled": false,
+  "autopep8.enabled": false
+}

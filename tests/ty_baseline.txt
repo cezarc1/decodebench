@@ -1,0 +1,59 @@
+# ty diagnostics allowed, as `file rule count message`; the counts only fall. Written by
+# `uv run python -m tests.ty_baseline --update`.
+# 121 diagnostics
+fp4bench/analysis/gates.py unresolved-attribute 1 Object of type `Iterable[int]` has no attribute `batch`
+fp4bench/analysis/gates.py unresolved-attribute 1 Object of type `Iterable[int]` has no attribute `prompt_len`
+fp4bench/profiling.py invalid-assignment 2 Invalid subscript assignment with key of type `Literal["elapsed_s"]` and value of type `float` on object of type `dict[str, str | list[dict[str, Any]]]`
+fp4bench/profiling.py invalid-assignment 1 Invalid subscript assignment with key of type `Literal["staging_s"]` and value of type `float` on object of type `dict[str, str | list[dict[str, Any]]]`
+fp4bench/publish.py redundant-condition 1 `None` is always falsy
+tests/analysis_runs.py invalid-assignment 1 Invalid subscript assignment with key of type `Literal["bf16_reference_nll"]` and value of type `dict[str, list[float] | float] | (Any & ~None & ~Literal["good"])` on object of type `dict[str, str]`
+tests/golden/make_identity.py invalid-argument-type 2 Argument expression after ** must be a mapping type: Found `dict[str, str] | str`
+tests/golden/mutations.py unresolved-attribute 1 Object of type `(Run, /) -> None` has no attribute `__name__`
+tests/test_analysis_checks.py too-many-positional-arguments 4 Too many positional arguments to function `reference_nll_comparison`: expected 3, got 4
+tests/test_analysis_gates.py unsupported-operator 1 Operator `+` is not supported between objects of type `list[float] | float` and `float*`
+tests/test_analysis_gates.py unsupported-operator 1 Operator `-` is not supported between objects of type `list[float] | float` and `float*`
+tests/test_analysis_run.py invalid-argument-type 3 Argument to function `write_run` is incorrect: Expected `str`, found `dict[Unknown, Unknown]`
+tests/test_analysis_run.py parameter-already-assigned 3 Multiple values provided for parameter `name` of function `write_run`
+tests/test_analysis_study_rules.py invalid-argument-type 5 Argument to function `write_run` is incorrect: Expected `str`, found `dict[Unknown, Unknown]`
+tests/test_analysis_study_rules.py parameter-already-assigned 5 Multiple values provided for parameter `name` of function `write_run`
+tests/test_analysis_study_rules.py too-many-positional-arguments 1 Too many positional arguments to function `write_run`: expected 6, got 7
+tests/test_cli.py too-many-positional-arguments 1 Too many positional arguments to function `write_run`: expected 6, got 7
+tests/test_manifest.py invalid-argument-type 3 Argument expression after ** must be a mapping type: Found `dict[str, str] | str`
+tests/test_manifest.py no-matching-overload 2 No overload of `dict.__init__` matches arguments
+tests/test_prompts.py invalid-argument-type 1 Argument to function `build_cell_prompt_sets` is incorrect: Expected `list[str]`, found `list[LiteralString]`
+tests/test_prompts.py invalid-argument-type 6 Argument to function `build_m1_prompt_sets` is incorrect: Expected `list[str]`, found `list[LiteralString]`
+tests/test_prompts.py invalid-argument-type 2 Argument to function `build_nll_prompts` is incorrect: Expected `list[str]`, found `list[LiteralString]`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `Crosscheck | None`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `G3Rule`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `KernelScanSpec | None`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `Prompts`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `ServerSettings`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `VerdictRule`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 2 Argument is incorrect: Expected `bool`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 2 Argument is incorrect: Expected `float | None`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `int | None`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 2 Argument is incorrect: Expected `int`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `tuple[Contrast, ...]`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `tuple[Ratio, ...]`, found `int | tuple[int, ...] | Unknown`
+tests/test_runner.py invalid-argument-type 1 Argument is incorrect: Expected `tuple[int, ...]`, found `int | tuple[int, ...] | Unknown`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `Treatment`, found `int | str`
+tests/test_schema.py invalid-argument-type 5 Argument is incorrect: Expected `bool | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `bool`, found `int | str`
+tests/test_schema.py invalid-argument-type 4 Argument is incorrect: Expected `dict[str, JsonValue]`, found `float | dict[str, int]`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `dict[str, JsonValue]`, found `int | str`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `dict[str, bool | None] | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 3 Argument is incorrect: Expected `dict[str, int]`, found `float | dict[str, int]`
+tests/test_schema.py invalid-argument-type 2 Argument is incorrect: Expected `dict[str, str] | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 3 Argument is incorrect: Expected `float | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 6 Argument is incorrect: Expected `float`, found `float | dict[str, int]`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `int | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 3 Argument is incorrect: Expected `int`, found `float | dict[str, int]`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `int`, found `int | str`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `list[float] | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `list[int] | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 15 Argument is incorrect: Expected `list[str] | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 4 Argument is incorrect: Expected `str | None`, found `int | str`
+tests/test_schema.py invalid-argument-type 1 Argument is incorrect: Expected `str`, found `int | str`
+tests/test_wave.py unresolved-attribute 1 Attribute `set` is not defined on `int` in union `int | Event`
+tests/test_wave.py unresolved-attribute 1 Attribute `wait` is not defined on `int` in union `int | Event`
+tests/test_wave.py unsupported-operator 1 Operator `+=` is not supported between objects of type `Event` and `Literal[1]`

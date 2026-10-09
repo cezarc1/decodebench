@@ -1,0 +1,472 @@
+{
+ "aa": {},
+ "accuracy": {
+  "bf16": 1.7729928782209754,
+  "mx": 1.9091719557356064,
+  "n_windows": 64,
+  "nv": 1.8238470908679751,
+  "nv_minus_mx": {
+   "hi": -0.07439433979901167,
+   "level": 0.95,
+   "lo": -0.09646558518713103,
+   "mean": -0.08532486486763127,
+   "resamples": 10000,
+   "seed": 0
+  },
+  "problems": [],
+  "reference_run": null
+ },
+ "effective_bandwidth": {
+  "MX": {
+   "1": {
+    "bytes": 18570018816.0,
+    "bytes_per_s": 2982791134075.2554,
+    "format": "mxfp4",
+    "fraction_of_peak": 0.37284889175940694,
+    "rounds": 1,
+    "step_s": 0.006225718791992185
+   },
+   "128": {
+    "bytes": 73968386048.0,
+    "bytes_per_s": 4907578241686.868,
+    "format": "mxfp4",
+    "fraction_of_peak": 0.6134472802108585,
+    "rounds": 1,
+    "step_s": 0.015072278505859349
+   },
+   "32": {
+    "bytes": 32092454912.0,
+    "bytes_per_s": 3802147684883.9556,
+    "format": "mxfp4",
+    "fraction_of_peak": 0.47526846061049444,
+    "rounds": 1,
+    "step_s": 0.008440612404296832
+   }
+  },
+  "NV": {
+   "1": {
+    "bytes": 19545194496.0,
+    "bytes_per_s": 3356191938832.511,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.4195239923540639,
+    "rounds": 1,
+    "step_s": 0.005823622382812532
+   },
+   "128": {
+    "bytes": 74943561728.0,
+    "bytes_per_s": 4948387965687.744,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.618548495710968,
+    "rounds": 1,
+    "step_s": 0.015145045668945256
+   },
+   "32": {
+    "bytes": 33067630592.0,
+    "bytes_per_s": 4103934484756.7466,
+    "format": "nvfp4",
+    "fraction_of_peak": 0.5129918105945933,
+    "rounds": 1,
+    "step_s": 0.008057543490234353
+   }
+  }
+ },
+ "experiment": "main",
+ "failed_sessions": [],
+ "gate_line": "gates: G1 FAIL \u00b7 G2 pass \u00b7 G3 FAIL \u00b7 G4 pass \u00b7 G5a pass \u00b7 G5b pass \u00b7 G6a FAIL \u00b7 G6b FAIL \u00b7 G7 pass",
+ "gates": {
+  "G1_kernels": false,
+  "G2_bytes": true,
+  "G3_aa": false,
+  "G4_env_throttle": true,
+  "G5a_structure": true,
+  "G5b_nll": true,
+  "G6a_integrity": false,
+  "G6b_m2_validity": false,
+  "G7_same_gpu_per_round": true
+ },
+ "hypothesis_reading": null,
+ "interpretable": false,
+ "kernel_scan": {
+  "candidates": {
+   "NVc": 0.009369681369140848,
+   "NVd": 0.008877070113280983,
+   "NVt": 0.010329640931640682,
+   "NVv": 0.01148095357226575
+  },
+  "eligibility": {
+   "NVc": {
+    "eligible": true,
+    "error": null,
+    "failed": false,
+    "g5b": true,
+    "kernel_ok": true,
+    "nll": 1.8238470908679751,
+    "nll_diff": 0.0,
+    "nll_ok": true,
+    "reasons": [],
+    "step_c32_s": 0.009369681369140848
+   },
+   "NVd": {
+    "eligible": true,
+    "error": null,
+    "failed": false,
+    "g5b": true,
+    "kernel_ok": true,
+    "nll": 1.8238470908679751,
+    "nll_diff": 0.0,
+    "nll_ok": true,
+    "reasons": [],
+    "step_c32_s": 0.008877070113280983
+   },
+   "NVt": {
+    "eligible": true,
+    "error": null,
+    "failed": false,
+    "g5b": true,
+    "kernel_ok": true,
+    "nll": 1.8238470908679751,
+    "nll_diff": 0.0,
+    "nll_ok": true,
+    "reasons": [],
+    "step_c32_s": 0.010329640931640682
+   },
+   "NVv": {
+    "eligible": true,
+    "error": null,
+    "failed": false,
+    "g5b": true,
+    "kernel_ok": true,
+    "nll": 1.8238470908679751,
+    "nll_diff": 0.0,
+    "nll_ok": true,
+    "reasons": [],
+    "step_c32_s": 0.01148095357226575
+   }
+  },
+  "expected_kernels": {
+   "NV": "FlashInferCuteDslNvFp4LinearKernel",
+   "NVc": "FlashInferCutlassNvFp4LinearKernel",
+   "NVd": "FlashInferCudnnNvFp4LinearKernel",
+   "NVt": "FlashInferTrtllmNvFp4LinearKernel",
+   "NVv": "CutlassNvFp4LinearKernel"
+  },
+  "failed": [],
+  "kernel_matches": {
+   "NV": true,
+   "NVc": true,
+   "NVd": true,
+   "NVt": true,
+   "NVv": true
+  },
+  "margin": {
+   "decided_by": "C=32",
+   "fastest": "NVd",
+   "gap": 0.055492549858637386,
+   "runner_up": "NVc",
+   "step_s": {
+    "NVc": 0.009369681369140848,
+    "NVd": 0.008877070113280983
+   },
+   "tie": false,
+   "tie_margin": 0.01,
+   "tiebreak": null,
+   "tiebreak_c": 128
+  },
+  "median_step_s": {
+   "NV": {
+    "1": 0.005823622382812532,
+    "128": 0.015145045668945256,
+    "32": 0.008057543490234353
+   },
+   "NVc": {
+    "1": 0.0072602938183592425,
+    "128": 0.015552704209960577,
+    "32": 0.009369681369140848
+   },
+   "NVd": {
+    "1": 0.006894417573242162,
+    "128": 0.015466727872070596,
+    "32": 0.008877070113280983
+   },
+   "NVt": {
+    "1": 0.00856617297656248,
+    "128": 0.016126684696288862,
+    "32": 0.010329640931640682
+   },
+   "NVv": {
+    "1": 0.008271457151367123,
+    "128": 0.01746876990527335,
+    "32": 0.01148095357226575
+   }
+  },
+  "nv_nll": 1.8238470908679751,
+  "observed_kernels": {
+   "NV": [
+    "FlashInferCuteDslNvFp4LinearKernel"
+   ],
+   "NVc": [
+    "FlashInferCutlassNvFp4LinearKernel"
+   ],
+   "NVd": [
+    "FlashInferCudnnNvFp4LinearKernel"
+   ],
+   "NVt": [
+    "FlashInferTrtllmNvFp4LinearKernel"
+   ],
+   "NVv": [
+    "CutlassNvFp4LinearKernel"
+   ]
+  },
+  "ratio_to_nv": {
+   "NV": {
+    "1": 1.0,
+    "128": 1.0,
+    "32": 1.0
+   },
+   "NVc": {
+    "1": 1.2466972171456052,
+    "128": 1.026916956866708,
+    "32": 1.1628458947192515
+   },
+   "NVd": {
+    "1": 1.1838709861391266,
+    "128": 1.0212400946261222,
+    "32": 1.1017092397999322
+   },
+   "NVt": {
+    "1": 1.4709355128938542,
+    "128": 1.0648158512559949,
+    "32": 1.2819838880373509
+   },
+   "NVv": {
+    "1": 1.4203285528572345,
+    "128": 1.1534313125970208,
+    "32": 1.4248701960070747
+   }
+  },
+  "reason": null,
+  "selected": "NVd",
+  "selected_kernel": "FlashInferCudnnNvFp4LinearKernel",
+  "selected_server_args": [
+   "--linear-backend",
+   "flashinfer_cudnn"
+  ],
+  "selection_c": 32,
+  "treatments": [
+   "NV",
+   "NVc",
+   "NVt",
+   "NVd",
+   "NVv"
+  ]
+ },
+ "kv_cache_dtype": "bfloat16",
+ "kv_cache_dtype_note": null,
+ "m1": {},
+ "m1_d": {},
+ "m1_f": {},
+ "m1_k": {},
+ "m1_phi": {},
+ "m1_r_f_phi": {},
+ "m2_aa": {},
+ "m2_d": {},
+ "m2_f": {},
+ "m2_itl": {},
+ "m2_itl_d": {},
+ "m2_itl_f": {},
+ "m2_itl_k": {},
+ "m2_itl_phi": {},
+ "m2_k": {},
+ "m2_phi": {},
+ "m2_throughput": {},
+ "nonblocking_failed": [
+  "G6b"
+ ],
+ "nvx_crosscheck": {
+  "1": {
+   "nv_step_s": 0.005823622382812532,
+   "nvx_step_s": 0.005796595429687468,
+   "ratio": 0.9953590821402105
+  },
+  "128": {
+   "nv_step_s": 0.015145045668945256,
+   "nvx_step_s": 0.015140111690429725,
+   "ratio": 0.9996742183138049
+  },
+  "32": {
+   "nv_step_s": 0.008057543490234353,
+   "nvx_step_s": 0.00809261695312502,
+   "ratio": 1.004352872923761
+  }
+ },
+ "order_effect": {
+  "MX": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.006223189162109344,
+    "n2": 0.006228196964355448,
+    "n2_over_n1": 1.0008047003097054
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015078313457031256,
+    "n2": 0.015068251105468722,
+    "n2_over_n1": 0.9993326606724812
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.008426464263671885,
+    "n2": 0.008441020601074212,
+    "n2_over_n1": 1.0017274549498871
+   }
+  },
+  "NV": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.005826022004882803,
+    "n2": 0.005822881038574201,
+    "n2_over_n1": 0.9994608729067674
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015145045668945256,
+    "n2": 0.01510867512451175,
+    "n2_over_n1": 0.9975985186688421
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.008057543490234353,
+    "n2": 0.008058937126464827,
+    "n2_over_n1": 1.0001729604354184
+   }
+  },
+  "NVc": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.00725949051855479,
+    "n2": 0.007260774921874935,
+    "n2_over_n1": 1.0001769274740235
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015566866301757853,
+    "n2": 0.015511986601562278,
+    "n2_over_n1": 0.996474582672469
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.009369681369140848,
+    "n2": 0.009367475337402342,
+    "n2_over_n1": 0.9997645563758688
+   }
+  },
+  "NVd": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.006893042272460903,
+    "n2": 0.0068947273837889345,
+    "n2_over_n1": 1.0002444655438665
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015466727872070596,
+    "n2": 0.015422210609374876,
+    "n2_over_n1": 0.9971217400950004
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.008877070113280983,
+    "n2": 0.00886970797314457,
+    "n2_over_n1": 0.9991706565294107
+   }
+  },
+  "NVt": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.00856617297656248,
+    "n2": 0.008566173805664379,
+    "n2_over_n1": 1.0000000967879006
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.016126684696288862,
+    "n2": 0.016083186678711003,
+    "n2_over_n1": 0.9973027303257272
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.010329640931640682,
+    "n2": 0.010323254152831973,
+    "n2_over_n1": 0.999381703696094
+   }
+  },
+  "NVv": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.008271704761718901,
+    "n2": 0.008271268035644708,
+    "n2_over_n1": 0.9999472024102922
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.01746876990527335,
+    "n2": 0.01744216842236357,
+    "n2_over_n1": 0.9984771977045875
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.01148095357226575,
+    "n2": 0.01147905710644559,
+    "n2_over_n1": 0.9998348163496852
+   }
+  },
+  "NVx": {
+   "1": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.005795589892578112,
+    "n2": 0.005796809763183419,
+    "n2_over_n1": 1.0002104825613816
+   },
+   "128": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.015140111690429725,
+    "n2": 0.015101159665527386,
+    "n2_over_n1": 0.997427230016608
+   },
+   "32": {
+    "count_n1": 1,
+    "count_n2": 2,
+    "n1": 0.00809261695312502,
+    "n2": 0.008086034216308602,
+    "n2_over_n1": 0.9991865750159006
+   }
+  }
+ },
+ "primary_concurrencies": [
+  8,
+  32,
+  128
+ ],
+ "skipped": {},
+ "verdict": "incomplete (0/1 rounds; a CI needs at least 2)"
+}

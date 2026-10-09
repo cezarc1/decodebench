@@ -1,0 +1,11 @@
+{
+  "mx_expert_bytes": 10152345600,
+  "nv_expert_bytes": 10749542784,
+  "nv_over_mx": 1.0588235672355362,
+  "expected_nv_over_mx": 1.0588235294117647,
+  "mx_quant_algo": "MXFP4",
+  "nv_quant_algo": "NVFP4",
+  "nv_has_activation_scales": true,
+  "config_diff": {},
+  "nv_problems": []
+}
