@@ -54,15 +54,13 @@ class Contrast:
     arm: Arm
 
 
-MAX_NUM_SEQS = 512
-
-
 @dataclass(frozen=True)
 class ServerSettings:
     kv_dtype: KvDtype = KvDtype.BF16
     gpu_memory_utilization: float = 0.90
     max_model_len: int = 4096
     hf_overrides: str = ""
+    max_num_seqs: int = 512
 
     def args(self) -> tuple[str, ...]:
         """The `vllm serve` arguments every treatment shares (METHODOLOGY.md#server-args)."""
@@ -84,7 +82,7 @@ class ServerSettings:
             "--max-model-len",
             str(self.max_model_len),
             "--max-num-seqs",
-            str(MAX_NUM_SEQS),
+            str(self.max_num_seqs),
             "--max-num-batched-tokens",
             "16384",
             "--gpu-memory-utilization",
@@ -183,15 +181,15 @@ class Study:
                 f"sets; there are {settings.M1_SETS} (settings.M1_SETS)"
             )
         largest = max(self.batches)
-        if largest > settings.M1_SET_SIZE:
+        if self.prompts is Prompts.M1 and largest > settings.M1_SET_SIZE:
             self._refuse(
-                f"its largest batch {largest} is above the {settings.M1_SET_SIZE} prompts of a "
-                f"prompt set (settings.M1_SET_SIZE)"
+                f"its largest batch {largest} is above the {settings.M1_SET_SIZE} prompts of an "
+                f"M1 prompt set (settings.M1_SET_SIZE)"
             )
-        if largest > MAX_NUM_SEQS:
+        if largest > self.server.max_num_seqs:
             self._refuse(
-                f"its largest batch {largest} is above the server's {MAX_NUM_SEQS} sequences "
-                f"(--max-num-seqs)"
+                f"its largest batch {largest} is above its server's {self.server.max_num_seqs} "
+                f"sequences (--max-num-seqs)"
             )
         longest = max(cell.prompt_len for cell in self.cells)
         if (needed := longest + settings.M1_N2) > self.server.max_model_len:

@@ -8,7 +8,7 @@ import pytest
 from fp4bench import settings
 from fp4bench.core.schema import ManifestLine, load_rows
 from fp4bench.core.types import Cell, KvDtype, Treatment
-from fp4bench.studies import base, model
+from fp4bench.studies import model
 from fp4bench.studies.base import (
     Prompts,
     ServerSettings,
@@ -492,7 +492,6 @@ def test_the_kernel_scan_smoke_matches_experiment_md():
     assert SMOKE.treatments == ("MX", "NV", "NVx", "NVc", "NVt", "NVd", "NVv")
     assert SMOKE.batches == (1, 32, 128)
     assert SMOKE.m1_reps == 3
-    assert SMOKE.m1_reps <= settings.M1_SETS - 1
     assert SMOKE.m2_duration_s == 10
     assert SMOKE.require_published is False
     assert set(SMOKE.batches) <= set(FULL.batches)
@@ -574,24 +573,15 @@ def test_every_study_with_its_own_prompts_is_covered_by_the_prompt_file_prepare_
 
 
 @pytest.mark.parametrize("name", list(STUDIES))
-def test_every_study_is_runnable_with_the_configured_treatments_and_prompts(name):
-    study = STUDIES[name]
-    assert set(study.treatments) <= set(model.TREATMENTS)
-    assert len(set(study.treatments)) == len(study.treatments)
-    assert len(set(study.cells)) == len(study.cells)
-    if name in ("full", "expb", "expc"):
-        assert set(study.primary_batches) <= set(study.batches)
-    assert study.m1_reps <= settings.M1_SETS - 1
-    assert max(study.batches) <= settings.M1_SET_SIZE
-    args = study.server.args()
-    assert max(study.batches) <= int(args[args.index("--max-num-seqs") + 1])
-    max_model_len = int(args[args.index("--max-model-len") + 1])
-    for cell in study.cells:
-        assert cell.prompt_len + settings.M1_N2 <= max_model_len
+def test_every_study_serves_the_window_and_sequences_its_design_is_checked_against(name):
+    server = STUDIES[name].server
+    args = server.args()
+    assert args[args.index("--max-model-len") + 1] == str(server.max_model_len)
+    assert args[args.index("--max-num-seqs") + 1] == str(server.max_num_seqs)
 
 
 def test_a_study_refuses_more_m1_reps_than_the_prompt_sets_after_the_warmup_set():
-    assert replace(FULL, m1_reps=settings.M1_SETS - 1).m1_reps == 5
+    replace(FULL, m1_reps=settings.M1_SETS - 1)
     with pytest.raises(
         ValueError,
         match=r"^study full: its 6 M1 reps and the warmup need 7 prompt sets; "
@@ -600,25 +590,44 @@ def test_a_study_refuses_more_m1_reps_than_the_prompt_sets_after_the_warmup_set(
         replace(FULL, m1_reps=settings.M1_SETS)
 
 
-def test_a_study_refuses_a_batch_above_the_prompt_sets_or_the_servers_max_num_seqs(monkeypatch):
-    assert max(EXPB.batches) == settings.M1_SET_SIZE == base.MAX_NUM_SEQS == 512
+def test_a_study_on_the_m1_prompts_refuses_a_batch_above_an_m1_prompt_set():
+    assert max(EXPB.batches) == settings.M1_SET_SIZE == EXPB.server.max_num_seqs == 512
     with pytest.raises(
         ValueError,
-        match=r"^study expb: its largest batch 513 is above the 512 prompts of a prompt set "
+        match=r"^study expb: its largest batch 513 is above the 512 prompts of an M1 prompt set "
         r"\(settings.M1_SET_SIZE\)$",
     ):
-        replace(EXPB, cells=cells_at(1024, (128, 256, 513)), primary_batches=(256,))
-    monkeypatch.setattr(base, "MAX_NUM_SEQS", 256)
+        replace(
+            EXPB,
+            cells=cells_at(1024, (128, 256, 513)),
+            primary_batches=(256,),
+            server=replace(EXPB.server, max_num_seqs=1024),
+        )
+
+
+def test_a_cell_study_sizes_its_prompt_sets_per_batch_so_only_its_server_bounds_a_batch():
+    cells = (*EXPC.cells, Cell(513, 360))
+    replace(EXPC, cells=cells, server=replace(EXPC.server, max_num_seqs=513))
     with pytest.raises(
-        ValueError, match=r"^study expb: its largest batch 512 is above the server's 256 "
+        ValueError, match=r"^study expc: its largest batch 513 is above its server's 512 sequences"
     ):
-        replace(EXPB)
-    assert replace(EXPB, cells=cells_at(1024, (128, 256)), primary_batches=(256,))
+        replace(EXPC, cells=cells)
+
+
+def test_a_study_refuses_a_batch_above_its_servers_max_num_seqs():
+    fewer = replace(EXPB.server, max_num_seqs=256)
+    replace(EXPB, cells=cells_at(1024, (128, 256)), primary_batches=(256,), server=fewer)
+    with pytest.raises(
+        ValueError,
+        match=r"^study expb: its largest batch 512 is above its server's 256 sequences "
+        r"\(--max-num-seqs\)$",
+    ):
+        replace(EXPB, server=fewer)
 
 
 def test_a_study_refuses_a_longest_prompt_and_n2_wave_beyond_the_servers_max_model_len():
     needed = 127360 + settings.M1_N2
-    assert replace(EXPC, server=replace(EXPC.server, max_model_len=needed))
+    replace(EXPC, server=replace(EXPC.server, max_model_len=needed))
     with pytest.raises(
         ValueError,
         match=rf"^study expc: its longest prompt \(127360 tokens\) and the {settings.M1_N2}-token "
