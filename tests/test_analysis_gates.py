@@ -9,10 +9,11 @@ from fp4bench.analysis import gates as gt
 from fp4bench.analysis.cells import m1_steps, session_ids
 from fp4bench.analysis.compare import ContrastResult, contrast
 from fp4bench.analysis.inputs import resolve_checkpoint
-from fp4bench.core.types import Cell, Gate, RatioName, Treatment, Verdict
+from fp4bench.core.types import Cell, Gate, LinearBackend, RatioName, Treatment, Verdict
 from fp4bench.studies import model
 from fp4bench.studies.expb import EXPB
 from fp4bench.studies.expc import AA_EFFECT_MARGIN_MS, EXPC, REGISTERED_CELLS
+from fp4bench.studies.model import pinned_to
 from fp4bench.studies.smoke import SMOKE
 from tests.analysis_runs import (
     ACT_QUANT_LINE,
@@ -32,11 +33,12 @@ from tests.analysis_runs import (
     c_manifest,
     drop_m1,
     expb_manifest,
-    expect_kernel,
     fail,
+    fusion_facts,
     graph_hash,
     kernel_line,
     manifest,
+    recording_args,
     set_fields,
     set_nll,
     smoke,
@@ -169,13 +171,51 @@ def test_g1_fails_the_aa_replica_on_another_kernel_than_mx():
     assert g1["pass"] is False and {m[1] for m in g1["mismatched_sessions"]} == {"MXp"}
 
 
-def test_g1_follows_nvas_configured_kernel(monkeypatch):
+def test_g1_follows_nvas_recorded_kernel():
     servers, m1, m2 = synthetic(1.0)
-    expect_kernel(monkeypatch, Treatment.NVA, "FlashInferCutlassNvFp4LinearKernel")
-    g1 = _gates(servers, m1, m2)[Gate.G1]
+    line = recording_args(manifest(), Treatment.NVA, pinned_to(LinearBackend.FLASHINFER_CUTLASS))
+    g1 = _gates(servers, m1, m2, manifest_line=line)[Gate.G1]
+    assert g1["expected"]["NVa"] == "FlashInferCutlassNvFp4LinearKernel"
     assert g1["pass"] is False and {m[1] for m in g1["mismatched_sessions"]} == {"NVa"}
     set_fields(servers, "NVa", linear_kernels=["FlashInferCutlassNvFp4LinearKernel"])
-    assert _gates(servers, m1, m2)[Gate.G1]["pass"] is True
+    assert _gates(servers, m1, m2, manifest_line=line)[Gate.G1]["pass"] is True
+
+
+def test_g1_follows_the_recorded_fusion():
+    servers, m1, m2 = _five()
+    line = recording_args(
+        manifest(treatments=FIVE), Treatment.NV, model.TREATMENTS[Treatment.NVNF].server_args
+    )
+    g1 = _gates(servers, m1, m2, manifest_line=line)[Gate.G1]
+    assert g1["expected_act_quant_fusion"]["NV"] is False
+    assert g1["pass"] is False and {m[1] for m in g1["fusion_mismatched_sessions"]} == {"NV"}
+    set_fields(servers, "NV", **fusion_facts("NVnf"))
+    assert _gates(servers, m1, m2, manifest_line=line)[Gate.G1]["pass"] is True
+
+
+@pytest.mark.parametrize("recorded", [None, ("MX", "NV", "MXp")], ids=["no-record", "partial"])
+def test_g1_expects_the_table_of_a_treatment_or_a_manifest_without_recorded_args(recorded):
+    servers, m1, m2 = _five()
+    line = manifest(treatments=FIVE)
+    for t in recorded or ():
+        line = recording_args(line, Treatment(t), model.TREATMENTS[Treatment(t)].server_args)
+    g1 = _gates(servers, m1, m2, manifest_line=line)[Gate.G1]
+    assert g1["pass"] is True
+    assert g1["expected"] == {t: model.TREATMENTS[Treatment(t)].linear_kernel for t in FIVE}
+    assert g1["expected_act_quant_fusion"] == {
+        t: model.TREATMENTS[Treatment(t)].act_quant_fusion for t in FIVE
+    }
+
+
+@pytest.mark.parametrize(
+    "recorded", [["--linear-backend"], {"NVa": "--linear-backend"}, {"XX": []}, {"NV": [1]}]
+)
+def test_a_malformed_record_of_the_server_args_is_refused(recorded):
+    servers, m1, m2 = synthetic(1.0)
+    line = manifest()
+    line["inputs"]["treatment_server_args"] = recorded
+    with pytest.raises(ValueError, match="treatment_server_args"):
+        _gates(servers, m1, m2, manifest_line=line)
 
 
 def test_g1_fails_a_treatment_with_no_expected_kernel_or_fusion():

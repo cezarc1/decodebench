@@ -18,12 +18,14 @@ from fp4bench.core.types import (
     Format,
     Gate,
     KvDtype,
+    LinearBackend,
     RatioName,
     Treatment,
     UnknownKvDtype,
     Verdict,
 )
 from fp4bench.studies import kernel_scan as scan_rule
+from fp4bench.studies import model
 from fp4bench.studies.main import FULL
 from fp4bench.studies.smoke import SMOKE
 from tests import RUNS_DIR
@@ -46,6 +48,7 @@ from tests.analysis_runs import (  # noqa: F401 - the fixtures _no_figures and f
     main_and_expb,
     manifest,
     pp,
+    recording_args,
     set_fields,
     set_nll,
     smoke,
@@ -723,6 +726,20 @@ def test_the_smoke_reports_the_scan_the_selection_and_the_crosscheck(tmp_path):
     assert g1["pass"] is True and set(g1["expected"]) == set(SMOKE.treatments)
     assert out.gates[Gate.G5B]["pass"] and out.gates[Gate.G6A]["pass"]
     assert set(out.bandwidth) == {"MX", "NV"}
+
+
+def test_g1_and_the_scan_expect_the_kernel_of_the_recorded_server_args(tmp_path):
+    servers, m1, m2 = smoke()
+    set_fields(servers, "NVc", linear_kernels=["CutlassNvFp4LinearKernel"])
+    line = recording_args(
+        smoke_manifest(require_published=False),
+        Treatment.NVC,
+        model.pinned_to(LinearBackend.CUTLASS),
+    )
+    _, out = _run(tmp_path, (servers, m1, m2), line)
+    assert out.gates[Gate.G1]["expected"]["NVc"] == "CutlassNvFp4LinearKernel"
+    assert out.gates[Gate.G1]["pass"] is True
+    assert out.scan is not None and out.scan.kernel_matches[Treatment.NVC] is True
 
 
 def test_the_summary_prints_the_margin_and_the_eligibility_table(tmp_path):

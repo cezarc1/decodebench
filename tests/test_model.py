@@ -204,6 +204,33 @@ def test_only_treatments_that_turn_the_fusion_off_on_the_command_line_are_nvfp4_
         assert spec.act_quant_fusion is (not is_mx and not turned_off), t
 
 
+def test_the_table_declares_the_fusion_its_server_args_serve():
+    for t, spec in SPECS.items():
+        fusion = model.expected_act_quant_fusion(t, spec.server_args)
+        assert (fusion is ActQuantFusion.ON) is spec.act_quant_fusion, t
+
+
+@pytest.mark.parametrize(
+    "treatment, args, fusion",
+    [
+        (T.MX, PIN, ActQuantFusion.OFF),
+        (T.MXP, (), ActQuantFusion.OFF),
+        (T.NV, (), ActQuantFusion.ON),
+        (T.NVA, model.NO_ACT_QUANT_FUSION, ActQuantFusion.OFF),
+        (
+            T.NV,
+            ("--compilation-config", '{"pass_config": {"fuse_act_quant": true}}'),
+            ActQuantFusion.ON,
+        ),
+        (T.NVNF, ("--compilation-config", '{"pass_config": {}}'), ActQuantFusion.ON),
+    ],
+)
+def test_the_fusion_of_server_args_is_off_for_mxfp4_and_where_they_turn_it_off(
+    treatment, args, fusion
+):
+    assert model.expected_act_quant_fusion(treatment, args) is fusion
+
+
 def test_the_nvidia_cross_check_and_the_kernel_scan_are_smoke_only():
     assert "NVx" not in FULL.treatments and "NVx" in SMOKE.treatments
     assert (SMOKE.kernel_scan, SMOKE.crosscheck) == (NVA_SCAN, NVX_CROSSCHECK)

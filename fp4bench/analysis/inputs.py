@@ -8,14 +8,18 @@ from typing import Any
 from fp4bench.analysis.cells import is_pos_int, session_ids
 from fp4bench.core.schema import M1Row, M2Row, ManifestLine, ServerRow, load_rows
 from fp4bench.core.types import (
+    ActQuantFusion,
     Cell,
     JsonValue,
     KvDtype,
+    LinearKernel,
     RecordedKvDtype,
+    Treatment,
     UnknownKvDtype,
     is_finite,
     is_number,
 )
+from fp4bench.studies import model
 from fp4bench.studies.main import FULL
 from fp4bench.studies.registry import recorded_protocol as protocol
 
@@ -56,6 +60,49 @@ def load_run(run_dir: Path) -> RunData:
 def inputs(manifest: ManifestLine | None) -> dict[str, Any]:
     value = None if manifest is None else manifest.inputs
     return value if isinstance(value, dict) else {}
+
+
+def recorded_server_args(manifest: ManifestLine | None) -> dict[Treatment, tuple[str, ...]]:
+    """inputs.treatment_server_args: the args each treatment of the run was served with; none in
+    a manifest from before the record."""
+    recorded = inputs(manifest).get("treatment_server_args")
+    if recorded is None:
+        return {}
+    if not (
+        isinstance(recorded, dict)
+        and all(t in Treatment for t in recorded)
+        and all(
+            isinstance(args, list) and all(isinstance(a, str) for a in args)
+            for args in recorded.values()
+        )
+    ):
+        raise ValueError(
+            f"inputs.treatment_server_args of the last manifest line is not a list of strings "
+            f"per treatment: {recorded!r}"
+        )
+    return {Treatment(t): tuple(args) for t, args in recorded.items()}
+
+
+def expected_kernels(manifest: ManifestLine | None) -> dict[Treatment, LinearKernel]:
+    """The kernel class each treatment's recorded server args select; model.TREATMENTS' for a
+    treatment the manifest does not record."""
+    recorded = recorded_server_args(manifest)
+    return {
+        t: model.expected_linear_kernel(t, recorded[t]) if t in recorded else spec.linear_kernel
+        for t, spec in model.TREATMENTS.items()
+    }
+
+
+def expected_fusions(manifest: ManifestLine | None) -> dict[Treatment, bool]:
+    """Whether each treatment's recorded server args fuse the activation quantization;
+    model.TREATMENTS' for a treatment the manifest does not record."""
+    recorded = recorded_server_args(manifest)
+    return {
+        t: model.expected_act_quant_fusion(t, recorded[t]) is ActQuantFusion.ON
+        if t in recorded
+        else spec.act_quant_fusion
+        for t, spec in model.TREATMENTS.items()
+    }
 
 
 def registered_rounds(manifest: ManifestLine | None) -> float | None:

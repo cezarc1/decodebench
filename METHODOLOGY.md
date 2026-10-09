@@ -1432,7 +1432,9 @@ The definitions are in [§9][e9], as §13 and §16 amend them. Implementation fa
   fails.
 - **G1.** Every session's `linear_kernels` equals `[expected]`, its fusion facts match
   ([#fusion](#fusion)), no NVnf session loaded NV's graph ([#compile-cache](#compile-cache)), and
-  the last manifest line's `problems` is exactly `[]`.
+  the last manifest line's `problems` is exactly `[]`. The expected class and fusion are those of
+  the server args that line records for the treatment (`inputs.treatment_server_args`), or the
+  `TREATMENTS` table's where it records none; the kernel scan expects the same classes.
 - **G2.** The checkpoint report's NV/MX bytes are within 2% of the format ratio. A missing or
   malformed report fails.
 - **G3.** See [#aa](#aa).

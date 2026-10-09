@@ -266,7 +266,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         scan=None
         if study.kernel_scan is None
         else kernel_scan(
-            step, sessions, batches, study.kernel_scan, g5b=gates[Gate.G5B], failed=failed
+            step, data.servers, batches, study.kernel_scan, g5b=gates[Gate.G5B], manifest=manifest
         ),
         crosscheck=None
         if study.crosscheck is None

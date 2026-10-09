@@ -13,7 +13,7 @@ from fp4bench.analysis.compare import ContrastResult, RatioResult, ratio_table
 from fp4bench.analysis.gates import g5b_nll
 from fp4bench.analysis.inputs import primary_batches
 from fp4bench.analysis.stats import OverallVerdict
-from fp4bench.core.types import Cell, RatioName, Treatment, Verdict
+from fp4bench.core.types import Cell, LinearBackend, RatioName, Treatment, Verdict
 from fp4bench.studies import kernel_scan as scan_rule
 from fp4bench.studies import model
 from fp4bench.studies.expb import EXPB
@@ -29,10 +29,10 @@ from tests.analysis_runs import (
     batch_steps,
     expb,
     expb_manifest,
-    expect_kernel,
     fail,
     manifest,
     pp,
+    recording_args,
     set_fields,
     set_nll,
     smoke,
@@ -283,12 +283,12 @@ def test_the_config_reproduction(r, status):
 
 
 def _scan(servers, m1, line: Any = "ok", spec: scan_rule.KernelScanSpec = scan_rule.NVA_SCAN):
-    """kernel_scan as the analysis calls it: with G5b's details and the failed sessions."""
+    """kernel_scan as the analysis calls it: with G5b's details and the manifest line."""
     rows = typed_servers(servers)
     sessions = cl.sessions_of(rows)
-    g5b = g5b_nll(sessions, typed_manifest(smoke_manifest() if line == "ok" else line))
+    typed = typed_manifest(smoke_manifest() if line == "ok" else line)
     scan = vd.kernel_scan(
-        batch_steps(servers, m1), sessions, SMOKE_CS, spec, g5b=g5b, failed=cl.failed_sessions(rows)
+        batch_steps(servers, m1), rows, SMOKE_CS, spec, g5b=g5b_nll(sessions, typed), manifest=typed
     )
     assert scan is not None
     return scan
@@ -375,11 +375,24 @@ def test_the_cute_dsl_kernel_is_never_selected_even_if_a_scan_kernel_expects_it(
 ):
     if default:
         monkeypatch.setattr(model, "DEFAULT_NVFP4_KERNEL", default)
-    expect_kernel(monkeypatch, Treatment.NVT, CUTE_DSL)
+    line = recording_args(smoke_manifest(), Treatment.NVT, model.PINNED_KERNEL)
     servers, m1, _ = smoke()
     set_fields(servers, "NVt", linear_kernels=[CUTE_DSL])
-    scan = _scan(servers, m1)
+    scan = _scan(servers, m1, line)
+    assert scan.expected_kernels[Treatment.NVT] == CUTE_DSL
+    assert scan.kernel_matches[Treatment.NVT] is True
     assert scan.selected == "NVd" and "NVt" not in scan.candidates
+
+
+def test_the_scan_expects_the_kernel_of_the_recorded_args_else_the_tables():
+    servers, m1, _ = smoke()
+    line = recording_args(smoke_manifest(), Treatment.NVC, model.pinned_to(LinearBackend.CUTLASS))
+    set_fields(servers, "NVc", linear_kernels=["CutlassNvFp4LinearKernel"])
+    scan = _scan(servers, m1, line)
+    assert scan.expected_kernels[Treatment.NVC] == "CutlassNvFp4LinearKernel"
+    assert scan.kernel_matches[Treatment.NVC] is True
+    assert scan.expected_kernels[Treatment.NVT] == model.TREATMENTS[Treatment.NVT].linear_kernel
+    assert _scan(servers, m1).kernel_matches[Treatment.NVC] is False
 
 
 def test_no_selection_without_a_usable_scan_kernel_at_c32():
@@ -492,11 +505,10 @@ def test_a_failed_scan_kernel_is_ineligible_even_with_steps_in_the_cells():
     every_cell = cl.by_batch(cl.m1_steps(typed_m1(m1), {s["session_id"] for s in servers}))
     scan = vd.kernel_scan(
         every_cell,
-        sessions,
+        typed_servers(rows),
         SMOKE_CS,
         scan_rule.NVA_SCAN,
         g5b=g5b_nll(sessions, typed_manifest(smoke_manifest())),
-        failed=cl.failed_sessions(typed_servers(rows)),
     )
     assert scan is not None
     e = scan.eligibility[Treatment.NVT]
@@ -508,8 +520,8 @@ def test_a_failed_scan_kernel_is_ineligible_even_with_steps_in_the_cells():
 
 def test_there_is_no_scan_or_crosscheck_in_a_run_without_scan_treatments():
     servers, m1, _ = synthetic(1.0)
-    sessions = cl.sessions_of(typed_servers(servers))
-    assert vd.kernel_scan(batch_steps(servers, m1), sessions, (8, 32), scan_rule.NVA_SCAN) is None
+    rows = typed_servers(servers)
+    assert vd.kernel_scan(batch_steps(servers, m1), rows, (8, 32), scan_rule.NVA_SCAN) is None
     assert vd.nvx_crosscheck(batch_steps(servers, m1), (8, 32), scan_rule.NVX_CROSSCHECK) is None
 
 
@@ -517,13 +529,7 @@ def test_the_scan_is_there_when_its_only_sessions_failed():
     servers, m1, _ = smoke({"MX": 1.0, "NV": 1.0, "NVc": 1.1})
     rows = typed_servers(fail(servers, "NVc"))
     m1 = [r for r in m1 if r["treatment"] != "NVc"]
-    scan = vd.kernel_scan(
-        batch_steps(servers, m1),
-        cl.sessions_of(rows),
-        SMOKE_CS,
-        scan_rule.NVA_SCAN,
-        failed=cl.failed_sessions(rows),
-    )
+    scan = vd.kernel_scan(batch_steps(servers, m1), rows, SMOKE_CS, scan_rule.NVA_SCAN)
     assert scan is not None and scan.selected is None
 
 

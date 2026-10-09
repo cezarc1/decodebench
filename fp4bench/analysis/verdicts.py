@@ -6,9 +6,16 @@ from enum import StrEnum
 from typing import Self, override
 
 from fp4bench.analysis import stats
-from fp4bench.analysis.cells import Values, mean_nll, median_value, paired_rounds
+from fp4bench.analysis.cells import (
+    Values,
+    failed_sessions,
+    mean_nll,
+    median_value,
+    paired_rounds,
+    sessions_of,
+)
 from fp4bench.analysis.compare import ContrastResult, RatioResult
-from fp4bench.analysis.inputs import primary_batches, registered_rounds
+from fp4bench.analysis.inputs import expected_kernels, primary_batches, registered_rounds
 from fp4bench.core.schema import ManifestLine, ServerRow
 from fp4bench.core.types import (
     Cell,
@@ -282,16 +289,18 @@ def _rel_gap(a: float, b: float) -> float:
 
 def kernel_scan(
     step: Values[int],
-    sessions: Sequence[ServerRow],
+    servers: Sequence[ServerRow],
     batches: Sequence[int],
     spec: KernelScanSpec,
     g5b: Mapping | None = None,
-    failed: Sequence[ServerRow] = (),
+    manifest: ManifestLine | None = None,
 ) -> KernelScan | None:
-    """The NVa rule (`spec`, METHODOLOGY.md#nv-alt); None for a run without a scan treatment."""
+    """The NVa rule (`spec`, METHODOLOGY.md#nv-alt); None for a run without a scan treatment.
+    Each treatment is expected to run the kernel of the server args `manifest` records."""
+    sessions = sessions_of(servers)
     scan = spec.treatments
     failed_by: dict[Treatment, ServerRow] = {}
-    for row in failed:
+    for row in failed_sessions(servers):
         failed_by.setdefault(row.treatment, row)
     if (
         not any(s.treatment in scan for s in sessions)
@@ -310,9 +319,8 @@ def kernel_scan(
     ratio = {
         t: {c: m / nv_median[c] for c, m in median[t].items() if c in nv_median} for t in treatments
     }
-    expected = {
-        t: served.linear_kernel if (served := model.TREATMENTS.get(t)) else None for t in treatments
-    }
+    kernels = expected_kernels(manifest)
+    expected = {t: kernels.get(t) for t in treatments}
     cute_dsl_kernel = LinearBackend.FLASHINFER_CUTEDSL.kernel
     observed = {
         t: sorted({k for s in sessions if s.treatment == t for k in s.linear_kernels or []})

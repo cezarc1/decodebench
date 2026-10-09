@@ -4,7 +4,7 @@ import json
 import statistics
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from fp4bench import settings
@@ -28,6 +28,8 @@ from fp4bench.analysis.compare import (
 )
 from fp4bench.analysis.inputs import (
     bf16_reference,
+    expected_fusions,
+    expected_kernels,
     protocol_cells,
     registered_batches,
     registered_reps,
@@ -43,7 +45,6 @@ from fp4bench.core.types import (
     is_number,
 )
 from fp4bench.lib_bench import VALID_AGGREGATE_SOURCE
-from fp4bench.studies import model
 from fp4bench.studies.base import Ratio, min_kv_tokens_for
 
 NON_BLOCKING_GATES = frozenset({Gate.G6B})
@@ -52,17 +53,14 @@ GateReport = dict[str, dict[str, Any]]
 
 @dataclass(frozen=True)
 class GateSpec:
-    """What a study's gates check; `by_cell` lists M1 blocks by (C, P), not by batch."""
+    """What a study's gates check; `by_cell` lists M1 blocks by (C, P), not by batch. Without
+    `expected_kernel` and `expected_fusion`, G1 expects those of the recorded server args."""
 
     cells: tuple[Cell, ...]
     m2: bool
     by_cell: bool
-    expected_kernel: Mapping[Treatment, str] = field(
-        default_factory=lambda: {t: s.linear_kernel for t, s in model.TREATMENTS.items()}
-    )
-    expected_fusion: Mapping[Treatment, bool] = field(
-        default_factory=lambda: {t: s.act_quant_fusion for t, s in model.TREATMENTS.items()}
-    )
+    expected_kernel: Mapping[Treatment, str] | None = None
+    expected_fusion: Mapping[Treatment, bool] | None = None
 
     @property
     def names(self) -> tuple[Gate, ...]:
@@ -648,8 +646,10 @@ def gate_report(
         g3_gate = g3_aa_effects(
             g3.effects, any(s.treatment == g3.aa.numer for s in sessions), g3.margin_ms, g3.aa
         )
+    kernel = expected_kernels(manifest) if spec.expected_kernel is None else spec.expected_kernel
+    fusion = expected_fusions(manifest) if spec.expected_fusion is None else spec.expected_fusion
     report: GateReport = {
-        Gate.G1: g1_kernels(sessions, manifest, spec.expected_kernel, spec.expected_fusion),
+        Gate.G1: g1_kernels(sessions, manifest, kernel, fusion),
         Gate.G2: g2_bytes(sessions, checkpoint, checkpoint_source),
         Gate.G3: g3_gate,
         Gate.G4: (_g4_by_cell(sids, m1) if spec.by_cell else _g4_by_batch(sids, m1, m2)),

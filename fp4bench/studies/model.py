@@ -1,5 +1,6 @@
 """Qwen3-32B: its checkpoints, where they live, and how each treatment serves them."""
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -45,6 +46,19 @@ def expected_linear_kernel(treatment: Treatment, args: tuple[str, ...]) -> Linea
     if "--linear-backend" not in args:
         return DEFAULT_NVFP4_KERNEL
     return LinearBackend(args[args.index("--linear-backend") + 1]).kernel
+
+
+def expected_act_quant_fusion(treatment: Treatment, args: tuple[str, ...]) -> ActQuantFusion:
+    """Off for MXFP4, and where the args' --compilation-config turns pass_config.fuse_act_quant
+    off (NO_ACT_QUANT_FUSION); malformed JSON raises ValueError."""
+    if treatment in (Treatment.MX, Treatment.MXP):
+        return ActQuantFusion.OFF
+    if "--compilation-config" not in args:
+        return ActQuantFusion.ON
+    config = json.loads(args[args.index("--compilation-config") + 1])
+    passes = config.get("pass_config") if isinstance(config, dict) else None
+    off = isinstance(passes, dict) and passes.get("fuse_act_quant") is False
+    return ActQuantFusion.OFF if off else ActQuantFusion.ON
 
 
 def local_copy(volume_dir: str) -> str:

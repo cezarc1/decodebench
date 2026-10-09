@@ -3,7 +3,6 @@ change or drop a field), their typed forms, and run directories on disk."""
 
 import json
 import statistics
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -90,10 +89,11 @@ def figures() -> None:
     """analyze_run draws its figures in this test."""
 
 
-def expect_kernel(monkeypatch, treatment: Treatment, kernel: str) -> None:
-    """G1 and the kernel scan expect `kernel` of `treatment`."""
-    spec = replace(model.TREATMENTS[treatment], linear_kernel=kernel)
-    monkeypatch.setattr(model, "TREATMENTS", {**model.TREATMENTS, treatment: spec})
+def recording_args(line: dict, treatment: Treatment, args: tuple[str, ...]) -> dict:
+    """`line` with `treatment` served with `args` (inputs.treatment_server_args), which G1 and
+    the kernel scan expect the kernel and fusion of."""
+    recorded = {**line["inputs"].get("treatment_server_args", {}), treatment: list(args)}
+    return {**line, "inputs": {**line["inputs"], "treatment_server_args": recorded}}
 
 
 def pp(treatment: str, degradation: float | None = None) -> list[float]:
