@@ -280,7 +280,7 @@ def test_the_registered_cells_follow_section_16():
         (32, 3360),
         (128, 360),
     )
-    assert {design.kv_tokens(cell) for cell in expc.BATCH_ARM} == {128_000}
+    assert {design.kv_tokens(cell, expc.MEAN_CONTEXT_EXTRA) for cell in expc.BATCH_ARM} == {128_000}
     assert max(min_kv_tokens_for(*cell) for cell in expc.REGISTERED_CELLS) == 193_536
     assert design.arms_of(Cell(1, 127360)) == ["token", "batch"]
     assert expc.EXPC.cells == expc.REGISTERED_CELLS

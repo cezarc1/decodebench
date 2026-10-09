@@ -70,6 +70,17 @@ def test_h_batch_like_data_answers_batch(tmp_path):
     assert out.reproduction.status == "pass"
 
 
+def test_the_observed_kv_tokens_follow_the_rows_decode_lengths(tmp_path):
+    def longer(servers, m1):
+        for row in m1:
+            row["n1"], row["n2"] = 256, 2304
+
+    _, out = _analyze(tmp_path, mutate=longer, write=False)
+    assert _cell(out, 128, 360).kv_tokens_mean == 128 * (360 + (256 + 2304) // 2)
+    required = out.gates[Gate.G6A]["kv_capacity"]["required_tokens"]
+    assert required == max(c * (p + 2304) for c, p in expc.REGISTERED_CELLS)
+
+
 def test_h_tokens_like_data_answers_tokens(tmp_path):
     _, out = _analyze(tmp_path, delta=H_TOKENS, write=False)
     assert out.effects["E_tok"].classification == Effect.SHRINKS

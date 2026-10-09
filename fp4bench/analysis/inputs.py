@@ -5,9 +5,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
-from fp4bench.analysis.cells import is_pos_int, session_ids
+from fp4bench import settings
+from fp4bench.analysis.cells import is_pos_int, row_cell, session_ids
 from fp4bench.core.schema import M1Row, M2Row, ManifestLine, ServerRow, load_rows
 from fp4bench.core.types import (
     ActQuantFusion,
@@ -26,6 +27,19 @@ from fp4bench.studies.main import FULL
 from fp4bench.studies.registry import recorded_protocol as protocol
 
 
+class M1Shape(NamedTuple):
+    """What the counted M1 rows record of their blocks: their (C, P) cells, N1 and N2."""
+
+    cells: tuple[Cell, ...]
+    n1: int
+    n2: int
+
+    @property
+    def mean_context_extra(self) -> int:
+        """Tokens past the prompt at a block's mean context over its N1 and N2 waves."""
+        return (self.n1 + self.n2) // 2
+
+
 @dataclass(frozen=True)
 class RunData:
     run_dir: Path
@@ -41,6 +55,34 @@ class RunData:
     @cached_property
     def served_args(self) -> dict[Treatment, tuple[str, ...]]:
         return served_args(self.manifest)
+
+    @cached_property
+    def m1_shape(self) -> M1Shape:
+        """The counted rows' shape; N1 and N2 are the settings' in a run without rows, and rows
+        of several (N1, N2) raise ValueError."""
+        counted = session_ids(self.servers)
+        rows = [row for row in self.m1 if row.session_id in counted]
+        pairs = sorted({(row.n1, row.n2) for row in rows})
+        if len(pairs) > 1:
+            raise ValueError(
+                f"{self.run_dir}: several M1 decode lengths (n1, n2) {pairs} in the rows of its "
+                "counted sessions; the mean context is that of one pair"
+            )
+        n1, n2 = pairs[0] if pairs else (settings.M1_N1, settings.M1_N2)
+        cells = sorted({cell for row in rows if (cell := row_cell(row)) is not None})
+        return M1Shape(tuple(cells), n1, n2)
+
+    @property
+    def batch_prompt_len(self) -> int:
+        """The one prompt length of a run analysed by batch (the settings' without rows); a cell
+        study's rows have several, which raise ValueError here."""
+        lens = sorted({cell.prompt_len for cell in self.m1_shape.cells})
+        if len(lens) > 1:
+            raise ValueError(
+                f"{self.run_dir}: M1 cells of several prompt lengths {lens}, but "
+                f"the last manifest line has no protocol.cells (Experiment C)"
+            )
+        return lens[0] if lens else settings.M1_INPUT_LEN
 
 
 def load_run(run_dir: Path) -> RunData:

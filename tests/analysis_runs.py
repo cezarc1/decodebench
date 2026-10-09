@@ -456,7 +456,8 @@ C_CKPT = {
 C_REFERENCE = {"per_prompt": [1.8] * 4, "mean": 1.8}
 H_BATCH = {cell: expc.MAIN_RUN_DELTA_MS[cell[0]] for cell in expc.REGISTERED_CELLS}
 H_TOKENS = {
-    cell: design.h_tokens_delta_ms(design.kv_tokens(cell)) for cell in expc.REGISTERED_CELLS
+    cell: design.h_tokens_delta_ms(design.kv_tokens(cell, expc.MEAN_CONTEXT_EXTRA))
+    for cell in expc.REGISTERED_CELLS
 }
 
 

@@ -54,24 +54,32 @@ GateReport = dict[str, dict[str, Any]]
 
 @dataclass(frozen=True)
 class GateSpec:
-    """What a run's gates check; `by_cell` lists M1 blocks by (C, P), not by batch. G1 expects
-    the kernel and fusion of each treatment's `served_args` (inputs.served_args)."""
+    """What a run's gates check; `by_cell` lists M1 blocks by (C, P), not by batch. G6a sizes
+    the KV pool with the rows' `n2`, and G1 expects the kernel and fusion of each treatment's
+    `served_args` (inputs.RunData)."""
 
     cells: tuple[Cell, ...]
     m2: bool
     by_cell: bool
+    n2: int
     served_args: Mapping[Treatment, tuple[str, ...]]
 
     @property
     def names(self) -> tuple[Gate, ...]:
         return tuple(g for g in Gate if self.m2 or g != Gate.G6B)
 
+    def wave_kv_tokens(self, cell: Cell) -> int:
+        """KV tokens an M1 block of `cell` holds at the end of its N2 wave."""
+        return min_kv_tokens_for(cell.batch, cell.prompt_len, self.n2)
+
 
 def batch_gate_spec(
     batches: Iterable[int],
     manifest: ManifestLine | None,
     served_args: Mapping[Treatment, tuple[str, ...]],
-    prompt_len: int = settings.M1_INPUT_LEN,
+    *,
+    prompt_len: int,
+    n2: int,
 ) -> GateSpec:
     """The main run's gates: every batch measured or registered (protocol.concurrencies), M2."""
     expected = sorted(set(batches) | registered_batches(manifest))
@@ -79,6 +87,7 @@ def batch_gate_spec(
         cells=tuple(Cell(c, prompt_len) for c in expected),
         m2=True,
         by_cell=False,
+        n2=n2,
         served_args=served_args,
     )
 
@@ -424,17 +433,18 @@ def _measured_counts(
     return counts
 
 
-def _required_kv(cells: Sequence[Cell]) -> int | None:
-    return max((min_kv_tokens_for(c.batch, c.prompt_len) for c in cells), default=None)
+def _required_kv(spec: GateSpec) -> int | None:
+    return max((spec.wave_kv_tokens(c) for c in spec.cells), default=None)
 
 
 def _g6a_by_batch(
     sessions: Sequence[ServerRow],
     sids: set[str],
     m1: Sequence[M1Row],
-    cells: tuple[Cell, ...],
+    spec: GateSpec,
     reps: int | None,
 ) -> dict[str, Any]:
+    cells = spec.cells
     batches = sorted({c.batch for c in cells})
     by_round = _by_round(sessions)
     bad_sizes = [
@@ -456,7 +466,7 @@ def _g6a_by_batch(
                 (r.session_id, r.c), [r.round, r.treatment, r.c, r.preemptions_delta]
             )
     preempted_blocks = sorted(preempted.values(), key=lambda b: (b[0], b[1], b[2]))
-    required = _required_kv(cells)
+    required = _required_kv(spec)
     short = [
         [s.round, s.treatment, s.kv_cache_tokens]
         for s in by_round
@@ -487,10 +497,11 @@ def _g6a_by_cell(
     sessions: Sequence[ServerRow],
     sids: set[str],
     m1: Sequence[M1Row],
-    cells: tuple[Cell, ...],
+    spec: GateSpec,
     reps: int | None,
     manifest: ManifestLine | None,
 ) -> dict[str, Any]:
+    cells = spec.cells
     manifest_cells, cells_problem = protocol_cells(manifest)
     by_round = _by_round(sessions)
     rows = [r for r in m1 if r.session_id in sids]
@@ -529,17 +540,13 @@ def _g6a_by_cell(
         if not isinstance(s.cudagraph_capture_sizes, list)
         or any(c not in s.cudagraph_capture_sizes for c in batches)
     ]
-    required = _required_kv(cells)
+    required = _required_kv(spec)
     short = [
         [s.round, s.treatment, s.kv_cache_tokens]
         for s in by_round
         if required is None or not is_pos_int(s.kv_cache_tokens) or s.kv_cache_tokens < required
     ]
-    largest = (
-        None
-        if required is None
-        else list(max(cells, key=lambda c: min_kv_tokens_for(c.batch, c.prompt_len)))
-    )
+    largest = None if required is None else list(max(cells, key=spec.wave_kv_tokens))
     return {
         "pass": (
             cells_problem is None
@@ -667,9 +674,9 @@ def gate_report(
         },
         Gate.G5B: g5b_nll(sessions, manifest),
         Gate.G6A: (
-            _g6a_by_cell(sessions, sids, m1, spec.cells, reps, manifest)
+            _g6a_by_cell(sessions, sids, m1, spec, reps, manifest)
             if spec.by_cell
-            else _g6a_by_batch(sessions, sids, m1, spec.cells, reps)
+            else _g6a_by_batch(sessions, sids, m1, spec, reps)
         ),
     }
     if spec.m2:

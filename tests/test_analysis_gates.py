@@ -78,7 +78,9 @@ def _gates(
     spec=None,
 ):
     line = typed_manifest(manifest() if manifest_line == "ok" else manifest_line)
-    spec = spec or gt.batch_gate_spec(batches, line, served_args(line))
+    spec = spec or gt.batch_gate_spec(
+        batches, line, served_args(line), prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
+    )
     return gt.gate_report(
         typed_servers(servers),
         typed_m1(m1),
@@ -103,8 +105,13 @@ def test_a_clean_synthetic_run_passes_every_gate():
 
 
 def test_no_sessions_means_no_gate_passes():
-    by_cell = gt.GateSpec(cells=(), m2=False, by_cell=True, served_args=TABLE_ARGS)
-    for spec in (gt.batch_gate_spec((), None, TABLE_ARGS), by_cell):
+    by_cell = gt.GateSpec(
+        cells=(), m2=False, by_cell=True, n2=settings.M1_N2, served_args=TABLE_ARGS
+    )
+    by_batch = gt.batch_gate_spec(
+        (), None, TABLE_ARGS, prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
+    )
+    for spec in (by_batch, by_cell):
         gates = gt.gate_report([], [], [], None, None, None, spec, gt.AaRatios({}, ()))
         assert tuple(gates) == spec.names
         assert all(g == {"pass": False, "reason": "no sessions"} for g in gates.values())
@@ -608,10 +615,11 @@ def test_g6a_sizes_the_kv_pool_by_min_kv_tokens_for_of_every_expected_cell(monke
     monkeypatch.setattr(
         gt,
         "min_kv_tokens_for",
-        lambda c, p=settings.M1_INPUT_LEN: calls.append((c, p)) or 12_345 * c,
+        lambda c, p, n2: calls.append((c, p, n2)) or 12_345 * c,
     )
     kv = _gates(*synthetic(1.0))[Gate.G6A]["kv_capacity"]
-    assert sorted(calls) == [(8, 1024), (32, 1024)] and kv["required_tokens"] == 12_345 * 32
+    assert sorted(calls) == [(8, 1024, 1152), (32, 1024, 1152)]
+    assert kv["required_tokens"] == 12_345 * 32
 
 
 @pytest.mark.parametrize(
@@ -790,7 +798,9 @@ def _c_gates(mutate=None, manifest_line=None, **kw) -> dict:
         line,
         checkpoint,
         source,
-        gt.GateSpec(cells=cells, m2=False, by_cell=True, served_args=served_args(line)),
+        gt.GateSpec(
+            cells=cells, m2=False, by_cell=True, n2=settings.M1_N2, served_args=served_args(line)
+        ),
         gt.AaEffects(effects, AA_EFFECT_MARGIN_MS, AA),
     )
 

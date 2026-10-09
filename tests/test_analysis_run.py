@@ -235,6 +235,8 @@ def test_a_main_run_reads_its_context_from_the_rows_decode_lengths(tmp_path):
     run, out = _run(tmp_path, (servers, m1, m2))
     assert out.context == settings.M1_INPUT_LEN + (256 + 2304) // 2 == 2304
     assert "R_ideal: the bytes model's upper bound (§5) at context 2304 " in _md(run)
+    kv = out.gates[Gate.G6A]["kv_capacity"]
+    assert kv["required_tokens"] == 128 * (settings.M1_INPUT_LEN + 2304)
 
 
 def test_a_main_run_whose_rows_disagree_on_the_decode_lengths_is_refused(tmp_path):
