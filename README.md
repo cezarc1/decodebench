@@ -3,66 +3,47 @@
 
 ## Goal
 
-Benchmark realistic LLM workloads (a current, relevant model, served by a real engine, at realistic batch
-sizes).
+Benchmark realistic production-like workloads on non GEMM-bound tasks.
 
 #### NVFP4 vs MXFP4 TL;DR — _Last updated October 2026_
 
 - **([Benchmark your workload](https://x.com/StasBekman/status/2107221020197429422?s=20))**.
-  Decode performance differences seem to primarily depend on the kernel implementations for the dtypes, albeit we only tested NVFP4 and MXFP4 here. (TODO: test more)
+  Decode performance differences seem to primarily depend on the kernel implementations for the dtypes, albeit we only tested NVFP4 and MXFP4 here on a B200 (SM100) using a 32B param model w/ a KV Cache. (TODO: test more)
 - **LLM Decode using small batches? NVFP4 is faster:** +7.1%, +7.5% and +4.2% decode throughput at
-  batch 1, 8 and 32. The difference disappears at higher batch sizes for Qwen3-32B.
+  batch 1, 8 and 32. The difference disappears at higher batch sizes for Qwen3-32B. We can infer that the lack of difference is due to memory bandwidth saturation but we have not confirmed. 
 - **GEMM-bound? (aka prefill/training)** On large GEMMs NVFP4 delivers ~9% more TFLOPS than MXFP4 in PyTorch
   ([Stas's MAMF numbers](https://github.com/stas00/ml-engineering/blob/master/training/dtype.md#fp4-formats)).
 - **Serve NVFP4 on vLLM's default kernel**, CuTe-DSL (`--linear-backend flashinfer_cutedsl`). On
   the cuDNN kernel (`flashinfer_cudnn`) the same weights are 10–18% slower and lose to MXFP4.
-  Dense MXFP4 falls back to FlashInfer's `mm_fp4` (CuTe-DSL), which re-autotunes on every
-  server start.
-- **NVFP4 is also more accurate:** its NLL penalty over BF16 is 2.7× smaller.
+  Dense MXFP4 falls back to FlashInfer's `mm_fp4` (CuTe-DSL).
+- **NVFP4 is also more accurate:** its NLL penalty over BF16 is 2.7× smaller. TBD if this difference transfers to actual eval differences.
 
 ![NVFP4 vs MXFP4 decode throughput on B200, by batch size and by kernel](docs/figures/nvfp4_vs_mxfp4_decode_b200.png)
 
-*Left: NVFP4's decode-throughput advantage over MXFP4 against batch size (BF16 KV; FP8 KV at
-256 and 512), next to what the bytes model predicts. Right: the same NVFP4 weights on vLLM's
-CuTe-DSL and cuDNN kernels, both relative to MXFP4.*
 
 ![NVFP4 vs MXFP4: context length against batch size](docs/figures/nvfp4_vs_mxfp4_batch_vs_tokens_b200.png)
 
-*Time NVFP4 saves per decode step. Left: batch 1 while the context grows from 1k to 127k tokens.
-Right: batch 1 → 128 at a constant 128k tokens in the KV cache.*
-
 ## Results
 
-vLLM v0.31.0 · 1× NVIDIA B200 (SM100) · Qwen3-32B (dense, W4A4) ·
+vLLM v0.31.0 · 1× NVIDIA B200 SXM (SM100) on Modal · Qwen3-32B (dense, W4A4) ·
 
 | Date | vLLM | FlashInfer | GPU | Model | NVFP4 decode throughput vs MXFP4 | Details |
 |---|---|---|---|---|---|---|
 | 2026-10 | 0.31.0 | 0.7.0.post1 | 1× B200 | Qwen3-32B | +7.1 / +7.5 / +4.2% at batch 1 / 8 / 32; within ±2% at 64–512 | [RESULTS.md](RESULTS.md) |
 
-## What we found on vLLM v0.31.0
+## What we found on vLLM v0.31.0 
 
-- **Decode uses only 38–62% of the B200's memory bandwidth.** A bytes model predicted MXFP4, with
-  ~6% smaller weights, up to ~5% faster. NVFP4 won.
-- **The kernels around the matrix multiplies decide it.** Most of NVFP4's lead comes from
+- **The kernels dominate this perf difference.** Most of NVFP4's lead comes from
   MXFP4's slower activation quantization, extra small kernels and idle gaps between kernels.
   vLLM's NVFP4-only fused SiLU + quantization adds about 1%.
 - **The lead depends on batch size.** At batch 1, NVFP4 saves ~0.4 ms per step at any context
-  from 1k to 127k tokens. By batch 128 the lead is gone.
-- **At large batch the formats tie.** Stas's MAMF runs showed NVFP4 ~9% faster on large GEMMs;
-  in decode at batch 256–512 the two run at the same speed.
-
-*Caveat: two identical MXFP4 servers, our A/A control, differed by 0.3–0.4% at two batch sizes,
-enough to fail its pre-registered check, so the main verdict is formally not interpretable. A
-post-hoc check gives the same answer. Details in [RESULTS.md](RESULTS.md).*
-
-
-*Time NVFP4 saves per decode step. Left: batch 1 while the context grows from 1k to 127k tokens.
-Right: batch 1 → 128 at a constant 128k tokens in the KV cache.*
+  from 1k to 127k tokens. By batch 128 the lead is gone as theoretically things get memory bandwidth bound.
+- **At large batch the formats tie.** MAMF runs showed NVFP4 ~9% faster on large GEMMs;
+  in decode at batch 256–512 the two run at the same speed. Again, we can infer that this is due to memory bandwidth saturation.
 
 ## When GEMMs are the bottleneck
 
-Large matrix multiplies (prefill, training, decode at large batch) are compute-bound. There the
-library that runs the GEMM decides the result:
+Large matrix multiplies (prefill, training, decode at large batch) are generally considered compute-bound:
 
 | Large GEMMs on B200 | NVFP4 vs MXFP4 | Source |
 |---|---|---|
@@ -89,7 +70,7 @@ so that row compares libraries as much as formats. Our rows are medians that hel
   output tokens: (T(1152) − T(128)) / 1024 is one decode step at batch C, with prefill and HTTP
   cancelled out. M2 is llm-inference-bench's Sustained Decode, the number the community
   publishes.
-- **Design.** Treatments rotate in a Latin square over 5–10 rounds, on one B200 per run. Gates
+- **Design.** Treatments rotate in a Latin square over 5–10 rounds, on one GPU per run. Gates
   check the kernel each server ran, checkpoint bytes, A/A noise, throttling, accuracy,
   completeness and that every session used the same GPU.
 - **Pre-registered.** Hypotheses, the ±2% equivalence margin and the decision rules were fixed in
@@ -98,8 +79,7 @@ so that row compares libraries as much as formats. Our rows are medians that hel
 ## Run it
 
 Requirements: [uv](https://docs.astral.sh/uv/), a Modal account with B200 access, and a Modal
-secret `huggingface-secret` (a read-only HF token, a write token to `publish`, or `UNUSED=1` when
-every repo is public). Modal resolves secrets on every start, so even `fp4bench env` needs it.
+secret `huggingface-secret`.
 
 ```bash
 uv sync                                    # .venv on Python 3.12 with the dev tools
@@ -135,7 +115,7 @@ fp4bench analyze results/full-2 # verdict, gates, summary.md and figures, writte
 - **Kernel studies:** `fp4bench microbench --run-id <id>` and `fp4bench profile --run-id <id>`
   (EXPERIMENT.md §14–§15). **`--executor local`** runs the same runner on a local B200.
 
-## Re-run it on a new vLLM
+## Re-run it on a new vLLM version or config
 
 1. Bump the image digest and version pins in `fp4bench/settings.py`.
 2. Re-check the version-specific facts in [METHODOLOGY.md](METHODOLOGY.md) (kernel classes, log
@@ -145,7 +125,7 @@ fp4bench analyze results/full-2 # verdict, gates, summary.md and figures, writte
 
 New kernels, checkpoints or studies: [docs/extending.md](docs/extending.md).
 
-## Re-analyse the committed data (no GPU)
+## Re-analyse the data (no GPU required)
 
 `data/runs/` holds the raw rows of the published runs ([data/README.md](data/README.md)).
 `analyze` writes into the run directory, so work on a copy:
@@ -161,68 +141,10 @@ fp4bench plot share data/runs/full-1 data/runs/expb-1 --out-dir /tmp/fp4bench-fi
 `full-1` reports its G3 and G6b failures, as RESULTS.md describes; the smokes report "incomplete"
 because one round has no CI.
 
-## Studies
-
-| Study | What | Treatments | Cells (batch × prompt tokens) | Rounds | Run | time (B200) |
-|---|---|---|---|---|---|---|
-| `smoke` | Smoke, NVFP4 kernel scan (chose cuDNN for NV-alt), NVIDIA-checkpoint cross-check | MX, NV, NVx, NVc, NVt, NVd, NVv | 1, 32, 128 × 1,024 | 1 | `smoke-r2-2` | 53 min |
-| `smoke-nf` | NV-nf runs CuTe-DSL with the fusion off | MX, NV, NVnf | 1, 32, 128 × 1,024 | 1 | `smoke-nf-2` | 31 min |
-| `full` | Main experiment (§3–§9), BF16 KV, M1 + M2 | MX, NV, NVa, MXp, NVnf | 1, 8, 32, 64, 128 × 1,024 | 5, up to 10 | `full-1` (10) | 12.6 h per 5 rounds |
-| `expb` | Experiment B (§13): above the compute ridge, FP8 KV | MX, NV, MXp | 128, 256, 512 × 1,024 | 5, up to 10 | `expb-1` | 4.5 h |
-| `smoke-c` | Experiment C smoke: long context, KV capacity | MX, NV | (1, 1k), (1, 32k), (1, 127k), (128, 360) | 1 | `smoke-c-1` | – |
-| `expc` | Experiment C (§16): batch size vs context length, M1 only | MX, NV, MXp | 1 × 1k…127k (6 cells); 8 × 15k, 32 × 3.4k, 128 × 360 | 5, up to 10 | `expc-1` | 4.7 h |
-
-Treatments: MX and NV are our MXFP4 and NVFP4 checkpoints on `flashinfer_cutedsl`. NVa (NV-alt)
-is NV on cuDNN; MXp (MX′) is a second MXFP4 server, the A/A control; NVnf is NV with the fusion
-off; NVx is NVIDIA's checkpoint; NVc, NVt, NVd and NVv are the scanned NVFP4 kernels
-([EXPERIMENT.md §6](EXPERIMENT.md#treatments)). Times come from [docs/run-log.md](docs/run-log.md);
-check Modal's current B200 price before you run.
-
-## Repository
-
-```
-fp4bench/
-  cli.py        the fp4bench command (Click)
-  executors/    where a step runs: Modal (images, volumes, functions) or this machine
-  core/         vocabulary (Treatment, Cell, Gate, ...) and the versioned JSONL row schema
-  studies/      Study, treatments and checkpoints, the studies and their registry
-  gpu/          code that needs the GPU stack (torch, vLLM, FlashInfer); imported only on Modal
-  runner.py     one runner for any study's cells, in one container on one GPU
-  server.py, wave.py, decode_step.py, lib_bench.py, telemetry.py, metrics.py
-                vllm serve and its log facts, M1 waves and step time, M2, telemetry, preemptions
-  prep.py, prompts.py, quantize.py, publish.py, sanity.py, manifest.py, settings.py
-                prompt files, checkpoints, checkpoint report, environment manifest, pins
-  microbench.py, profiling.py, bytes_model.py   kernel microbenchmark, profiler, bytes model
-  analysis/     one analysis for every study: stats, gates, verdicts, report, figures
-tests/          unit, golden, identity and mutation tests (no GPU, no Modal)
-data/           raw data of the 2026-10 runs
-docs/           figures, run log, extending.md
-```
-
-[EXPERIMENT.md](EXPERIMENT.md) is the pre-registration, [METHODOLOGY.md](METHODOLOGY.md) the
-vendor-source facts behind every constant and check, and [RESULTS.md](RESULTS.md) the full
-results.
-
 ## Reproducibility
 
-- **Pinned stack:** image `vllm/vllm-openai@sha256:a4a4c0437bf7…` (vLLM 0.31.0, commit `db9527a`),
-  FlashInfer 0.7.0.post1, PyTorch 2.13.0, llm-compressor 0.14.0, llm-inference-bench `c71ec1f`.
-  Every run start verifies them and the GPU, records them, and aborts on a mismatch.
-- **Pinned inputs:** `Qwen/Qwen3-32B` @ `9216db5`, ShareGPT @ `192ab21`, the published checkpoint
-  revisions above, and the prompt files' sha256 (M1 `9930b747…`, NLL `dc20a835…`, Experiment C
-  `6439900e…`). A resume refuses changed inputs or protocol.
-- **Recorded code:** every manifest line records the protocol, the study and the code commit. The
-  committed 2026-10 runs predate the last two; they ran on pre-release code whose analysis this
-  code reproduces exactly (the golden tests below).
-- **Tests pin it:** the analysis reproduces every committed run's verdicts, gates and estimates
-  (to 1e-9); server argv, schedule and prompts are unchanged (`tests/golden/identity.json`);
-  mutated copies of the runs give the pinned outputs or refusals; the records a run start,
-  `quantize`, `publish`, `prepare` and `fetch` write are pinned key by key.
+These results should be reproducible. If not, please file a bug or PR request.
 
 ```bash
 make check            # what CI runs: ruff format --check, ruff, pyright, ty's ratchet, pytest
 ```
-## License
-
-MIT, see [LICENSE](LICENSE). `prepare` downloads ShareGPT at a pinned revision; the repo stores
-only the prompt files' hashes.
