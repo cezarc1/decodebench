@@ -248,6 +248,19 @@ def test_a_main_run_whose_rows_disagree_on_the_decode_lengths_is_refused(tmp_pat
     assert str(run) in str(exc.value) and "(128, 1152)" in str(exc.value)
 
 
+@pytest.mark.parametrize("field", ["n1", "n2"])
+@pytest.mark.parametrize("value", [None, "1152", True, 1152.0])
+def test_a_main_run_whose_rows_record_a_decode_length_that_is_no_positive_int_is_refused(
+    tmp_path, field, value
+):
+    servers, m1, m2 = synthetic(1.0, (8, 32, 128))
+    m1[3][field] = value
+    run = write_run(tmp_path, servers, m1, m2, manifest())
+    with pytest.raises(ValueError, match="not a positive integer") as exc:
+        evaluate(run)
+    assert str(run) in str(exc.value) and f"{field} {value!r}" in str(exc.value)
+
+
 def test_the_committed_main_runs_are_at_context_1664():
     for run in ("full-1", "expb-1"):
         out = evaluate(RUNS_DIR / run)

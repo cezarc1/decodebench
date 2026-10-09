@@ -58,10 +58,18 @@ class RunData:
 
     @cached_property
     def m1_shape(self) -> M1Shape:
-        """The counted rows' shape; N1 and N2 are the settings' in a run without rows, and rows
-        of several (N1, N2) raise ValueError."""
+        """The counted rows' shape; N1 and N2 are the settings' in a run without rows. A row
+        whose N1 or N2 is not a positive integer, and rows of several (N1, N2), raise
+        ValueError."""
         counted = session_ids(self.servers)
         rows = [row for row in self.m1 if row.session_id in counted]
+        for row in rows:
+            for name, value in (("n1", row.n1), ("n2", row.n2)):
+                if not is_pos_int(value):
+                    raise ValueError(
+                        f"{self.run_dir}: the M1 row of session {row.session_id}, set "
+                        f"{row.set}, C={row.c} records {name} {value!r}, not a positive integer"
+                    )
         pairs = sorted({(row.n1, row.n2) for row in rows})
         if len(pairs) > 1:
             raise ValueError(
