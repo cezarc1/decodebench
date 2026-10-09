@@ -548,16 +548,17 @@ def smi(monkeypatch):
     """nvidia-smi's memory.used answers in turn; None is a query that times out."""
     clock, answers, timeouts = JumpingClock(), [], []
 
-    def run(argv, **kwargs):
-        timeouts.append(kwargs["timeout"])
+    def nvidia_smi(args, timeout_s):
+        assert args == ("--query-gpu=memory.used", "--format=csv,noheader,nounits")
+        timeouts.append(timeout_s)
         answer = answers.pop(0) if answers else None
         if answer is None:
-            clock.now += kwargs["timeout"]
-            raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
-        return subprocess.CompletedProcess(argv, 0, stdout=f"{answer}\n")
+            clock.now += timeout_s
+            raise subprocess.TimeoutExpired(["nvidia-smi", *args], timeout_s)
+        return f"{answer}\n"
 
     monkeypatch.setattr(srv, "time", clock)
-    monkeypatch.setattr(srv.subprocess, "run", run)
+    monkeypatch.setattr(srv, "nvidia_smi", nvidia_smi)
     return clock, answers, timeouts
 
 

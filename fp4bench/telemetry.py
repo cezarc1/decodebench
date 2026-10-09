@@ -1,4 +1,5 @@
 # METHODOLOGY.md#telemetry
+import contextlib
 import re
 import subprocess
 import time
@@ -15,6 +16,7 @@ SAMPLER_QUERY = (
     "utilization.gpu,clocks_event_reasons.active"
 )
 NVIDIA_SMI_TIMEOUT_S = 60  # a healthy nvidia-smi answers in about a second
+KILLED_WAIT_S = 5
 
 
 def parse_counters(text: str) -> dict[ClockEvent, int]:
@@ -37,10 +39,24 @@ def parse_counters(text: str) -> dict[ClockEvent, int]:
 
 
 def nvidia_smi(args: Sequence[str], timeout_s: float = NVIDIA_SMI_TIMEOUT_S) -> str:
-    """nvidia-smi's stdout; a failed query raises CalledProcessError, a hung one TimeoutExpired."""
-    return subprocess.run(
-        ["nvidia-smi", *args], capture_output=True, text=True, check=True, timeout=timeout_s
-    ).stdout
+    """nvidia-smi's stdout; a failed query raises CalledProcessError, a hung one TimeoutExpired.
+
+    Not subprocess.run: after a timeout it waits for the killed child without a bound, and a
+    query stuck in the driver may never die. This one waits KILLED_WAIT_S, then abandons it."""
+    argv = ["nvidia-smi", *args]
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    stdout: str
+    stderr: str
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout_s)
+    except BaseException:
+        proc.kill()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=KILLED_WAIT_S)
+        raise
+    if proc.returncode:
+        raise subprocess.CalledProcessError(proc.returncode, argv, stdout, stderr)
+    return stdout
 
 
 def read_counters() -> dict[ClockEvent, int]:

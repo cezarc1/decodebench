@@ -167,16 +167,67 @@ def test_a_missing_counter_is_named_as_nvidia_smi_prints_it():
         tm.parse_counters(text)
 
 
-def test_the_counter_query_is_an_nvidia_smi_query_with_its_timeout(monkeypatch):
-    calls = []
+class FakeSmi:
+    """Stands in for subprocess.Popen around one nvidia-smi query; logs what it is asked."""
 
-    def run(argv, **kwargs):
-        calls.append((argv, kwargs))
-        return tm.subprocess.CompletedProcess(argv, 0, stdout=PERF)
+    def __init__(self, stdout="", returncode=0, hangs=False, dies_when_killed=True):
+        self.stdout, self.returncode = stdout, returncode
+        self.hangs, self.dies_when_killed = hangs, dies_when_killed
+        self.calls = []
 
-    monkeypatch.setattr(tm.subprocess, "run", run)
+    def __call__(self, argv, **kwargs):
+        self.calls.append(("Popen", argv, kwargs))
+        self.argv = argv
+        return self
+
+    def communicate(self, timeout: float = 0.0):
+        self.calls.append(("communicate", timeout))
+        if self.hangs:
+            raise tm.subprocess.TimeoutExpired(self.argv, timeout)
+        return self.stdout, "stderr"
+
+    def kill(self):
+        self.calls.append(("kill",))
+
+    def wait(self, timeout: float = 0.0):
+        self.calls.append(("wait", timeout))
+        if not self.dies_when_killed:
+            raise tm.subprocess.TimeoutExpired(self.argv, timeout)
+        return -9
+
+
+@pytest.fixture
+def smi(monkeypatch):
+    def install(**kwargs):
+        fake = FakeSmi(**kwargs)
+        monkeypatch.setattr(tm.subprocess, "Popen", fake)
+        return fake
+
+    return install
+
+
+def test_the_counter_query_is_an_nvidia_smi_query_with_its_timeout(smi):
+    fake = smi(stdout=PERF)
     assert tm.read_counters() == tm.parse_counters(PERF)
-    kwargs = {"capture_output": True, "text": True, "check": True}
-    assert calls == [
-        (["nvidia-smi", "-q", "-d", "PERFORMANCE"], {**kwargs, "timeout": tm.NVIDIA_SMI_TIMEOUT_S})
+    pipes = {"stdout": tm.subprocess.PIPE, "stderr": tm.subprocess.PIPE, "text": True}
+    assert fake.calls == [
+        ("Popen", ["nvidia-smi", "-q", "-d", "PERFORMANCE"], pipes),
+        ("communicate", tm.NVIDIA_SMI_TIMEOUT_S),
     ]
+
+
+def test_a_failed_query_raises_called_process_error_with_its_argv(smi):
+    smi(stdout="partial", returncode=9)
+    with pytest.raises(tm.subprocess.CalledProcessError) as exc:
+        tm.nvidia_smi(("-q",))
+    assert (exc.value.returncode, exc.value.cmd) == (9, ["nvidia-smi", "-q"])
+    assert (exc.value.output, exc.value.stderr) == ("partial", "stderr")
+
+
+@pytest.mark.parametrize("dies_when_killed", [True, False])
+def test_a_hung_query_is_killed_and_abandoned_rather_than_waited_for(smi, dies_when_killed):
+    fake = smi(hangs=True, dies_when_killed=dies_when_killed)
+    with pytest.raises(tm.subprocess.TimeoutExpired) as exc:
+        tm.nvidia_smi(("-q",), timeout_s=7)
+    assert (exc.value.cmd, exc.value.timeout) == (["nvidia-smi", "-q"], 7)
+    assert fake.calls[1:] == [("communicate", 7), ("kill",), ("wait", tm.KILLED_WAIT_S)]
