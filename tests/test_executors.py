@@ -289,10 +289,11 @@ def test_experiment_runs_the_named_study(runner_calls, monkeypatch):
 )
 def test_experiment_runs_every_study_with_its_rounds(runner_calls, monkeypatch, mode, study):
     monkeypatch.setattr(mx, "results", FakeVolume())
+    rounds = study.extension_rounds or study.rounds
     _experiment(mode, f"{mode}-1")
-    _experiment(mode, f"{mode}-1", rounds=10)
+    _experiment(mode, f"{mode}-1", rounds=rounds)
     assert runner_calls[0]["study"] == study == STUDIES[mode]
-    assert runner_calls[1]["study"] == dataclasses.replace(study, rounds=10)
+    assert runner_calls[1]["study"] == dataclasses.replace(study, rounds=rounds)
     assert str(runner_calls[0]["run_dir"]) == f"{settings.RESULTS_DIR}/{mode}-1"
 
 
@@ -302,6 +303,13 @@ def test_experiment_rounds_override_only_rounds(runner_calls, monkeypatch):
     _experiment("full", "full-1", rounds=0)
     assert runner_calls[0]["study"] == dataclasses.replace(STUDIES["full"], rounds=10)
     assert runner_calls[1]["study"] == STUDIES["full"]
+
+
+def test_experiment_refuses_rounds_that_are_not_pre_registered(runner_calls, monkeypatch):
+    monkeypatch.setattr(mx, "results", FakeVolume())
+    with pytest.raises(ValueError, match="7 is not a pre-registered round count of full"):
+        _experiment("full", "full-1", rounds=7)
+    assert runner_calls == []
 
 
 def test_experiment_passes_rerun_rounds_as_a_tuple(runner_calls, monkeypatch):
@@ -783,6 +791,15 @@ def test_the_child_runs_the_study_it_is_given(monkeypatch, tmp_path):
         (tmp_path / "c-1", dataclasses.replace(STUDIES["expc"], rounds=10), None, (3,)),
         (tmp_path / "c-1", STUDIES["expc"], None, ()),
     ]
+
+
+def test_the_child_refuses_rounds_that_are_not_pre_registered(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr("fp4bench.runner.run_experiment", lambda *a, **k: seen.append(a))
+    spec = {"study": "expc", "run_dir": str(tmp_path / "c-1"), "rounds": 50, "rerun_rounds": []}
+    with pytest.raises(ValueError, match="50 is not a pre-registered round count of expc"):
+        local.main([json.dumps(spec)])
+    assert seen == []
 
 
 def _in_a_child(code: str, env: dict[str, str]) -> str:

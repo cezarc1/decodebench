@@ -9,7 +9,7 @@ import click
 from fp4bench.core.types import CheckpointKind, ExecutorKind, FetchKind, Format
 from fp4bench.manifest import CodeVersion, code_version
 from fp4bench.studies.base import Study
-from fp4bench.studies.registry import STUDIES
+from fp4bench.studies.registry import STUDIES, study_to_run
 
 if TYPE_CHECKING:
     from fp4bench.executors.local import LocalExecutor
@@ -84,14 +84,12 @@ def parse_rerun_rounds(text: str, n_rounds: int) -> tuple[int, ...]:
     return tuple(sorted(parsed))
 
 
-def check_rounds(study: Study, rounds: int) -> None:
-    """A study with a registered extension may only gain rounds (EXPERIMENT.md §8, §13, §16)."""
-    if study.extension_rounds is not None and 0 < rounds < study.rounds:
-        raise click.BadParameter(
-            f"{rounds} is below the pre-registered {study.rounds} rounds of {study.name}; the "
-            f"only pre-registered change is extending (to {study.extension_rounds})",
-            param_hint="'--rounds'",
-        )
+def check_rounds(name: str, rounds: int) -> Study:
+    """The study a run runs; the executors run it through the same study_to_run."""
+    try:
+        return study_to_run(name, rounds)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="'--rounds'") from None
 
 
 def _program() -> str:
@@ -217,8 +215,8 @@ def fetch(kind: str, repo_id: str, revision: str) -> None:
     type=click.IntRange(min=0),
     default=0,
     show_default=True,
-    help="Rounds to run; 0 keeps the study's. A study with a registered extension "
-    "may only gain rounds; pass the same value on every restart.",
+    help="Rounds to run; 0 keeps the study's. Any other value must be its pre-registered "
+    "count or its registered extension's; pass the same value on every restart.",
 )
 @click.option(
     "--rerun-rounds",
@@ -260,9 +258,7 @@ def run(
     """Run STUDY: its rounds that are not complete, plus --rerun-rounds.
 
     On Modal the run is spawned in a detached app and this command returns at once."""
-    registered = STUDIES[study]
-    check_rounds(registered, rounds)
-    rerun = parse_rerun_rounds(rerun_rounds, rounds or registered.rounds)
+    rerun = parse_rerun_rounds(rerun_rounds, check_rounds(study, rounds).rounds)
     if executor == ExecutorKind.MODAL:
         if (data_dir, results_dir, local_dir) != (None, None, None):
             raise click.UsageError(

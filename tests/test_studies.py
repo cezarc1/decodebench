@@ -29,6 +29,7 @@ from fp4bench.studies.registry import (
     protocol_shape,
     registered_study,
     study_for,
+    study_to_run,
 )
 from fp4bench.studies.smoke import SMOKE, SMOKE_NF
 from tests import REPO, RUNS_DIR
@@ -245,6 +246,31 @@ def test_a_named_study_is_the_study_with_the_rounds_its_protocol_registered(name
     assert study_for(ManifestLine(study=name, protocol=protocol)) == STUDIES[name]
     extended = ManifestLine(study=name, protocol={**protocol, "rounds": 12})
     assert study_for(extended) == replace(STUDIES[name], rounds=12)
+
+
+def test_a_run_takes_its_studys_pre_registered_rounds_or_its_extension():
+    assert (FULL.rounds, FULL.extension_rounds) == (5, 10)
+    assert study_to_run("full") == study_to_run("full", 0) == study_to_run("full", 5) == FULL
+    assert study_to_run("full", 10) == replace(FULL, rounds=10)
+    assert study_to_run("smoke", 1) == study_to_run("smoke", 0) == SMOKE
+
+
+@pytest.mark.parametrize("rounds", [7, 50, 4, 1, 11, -1])
+def test_a_run_refuses_a_round_count_that_is_not_pre_registered(rounds):
+    with pytest.raises(
+        ValueError,
+        match=rf"^{rounds} is not a pre-registered round count of full: it runs 5, and the only "
+        r"pre-registered change is extending \(to 10\)$",
+    ):
+        study_to_run("full", rounds)
+
+
+def test_a_run_of_a_study_without_an_extension_refuses_any_other_round_count():
+    with pytest.raises(
+        ValueError,
+        match=r"^2 is not a pre-registered round count of smoke-c: it runs 1 and has no extension$",
+    ):
+        study_to_run("smoke-c", 2)
 
 
 def test_the_name_wins_over_the_protocol_rule():
