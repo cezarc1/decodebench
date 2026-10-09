@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from tests import REPO, RUNS_DIR
+from tests import REPO, RUNS_DIR, env_without_git
 from tests.golden.pngs import pixels
 
 CHECKPOINT_REPORT = "checkpoint_report.json"
@@ -126,7 +126,12 @@ def check_worktree(worktree: Path) -> None:
 
     def rev(cwd: Path, ref: str) -> str:
         return subprocess.run(
-            ["git", "rev-parse", ref], cwd=cwd, capture_output=True, text=True, check=True
+            ["git", "rev-parse", ref],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env_without_git(),
         ).stdout.strip()
 
     if rev(worktree, "HEAD") != rev(REPO, f"{OLD_TAG}^{{commit}}"):

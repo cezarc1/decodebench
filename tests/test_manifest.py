@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import types
@@ -7,7 +8,7 @@ import pytest
 from fp4bench import manifest as mf
 from fp4bench import settings
 from fp4bench.manifest import verify_manifest
-from tests import REPO
+from tests import REPO, env_without_git
 
 GOOD = {
     "gpu": {"name": "NVIDIA B200", "compute_cap": "10.0", "uuid": "GPU-1"},
@@ -208,14 +209,35 @@ def test_package_versions_reads_the_installed_compressed_tensors(monkeypatch):
     assert mf.package_versions()["compressed-tensors"] == "0.19.0"
 
 
+@pytest.fixture
+def no_git_env(monkeypatch):
+    """No GIT_* variable around the test, so code_version reads the repository it is given."""
+    for key in [k for k in os.environ if k.startswith("GIT_")]:
+        monkeypatch.delenv(key)
+
+
 def git(repo, *args):
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", *args],
         check=True,
         capture_output=True,
+        env=env_without_git(),
     )
 
 
+def test_the_git_helper_never_reaches_a_repository_the_environment_names(tmp_path, monkeypatch):
+    decoy, repo = tmp_path / "decoy", tmp_path / "repo"
+    for d in (decoy, repo):
+        d.mkdir()
+    git(decoy, "init", "-q")
+    config = (decoy / ".git" / "config").read_text()
+    monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(decoy))
+    git(repo, "init", "-q")
+    assert (repo / ".git").is_dir() and (decoy / ".git" / "config").read_text() == config
+
+
+@pytest.mark.usefixtures("no_git_env")
 def test_code_version_is_the_commit_and_whether_the_checkout_has_changes(tmp_path):
     git(tmp_path, "init", "-q")
     (tmp_path / "a.py").write_text("x = 1\n")
@@ -226,6 +248,7 @@ def test_code_version_is_the_commit_and_whether_the_checkout_has_changes(tmp_pat
         capture_output=True,
         text=True,
         check=True,
+        env=env_without_git(),
     ).stdout.strip()
     assert mf.code_version(tmp_path) == mf.CodeVersion(head, False)
     (tmp_path / "a.py").write_text("x = 2\n")
