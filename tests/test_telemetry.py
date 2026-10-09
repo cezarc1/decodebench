@@ -167,22 +167,16 @@ def test_a_missing_counter_is_named_as_nvidia_smi_prints_it():
         tm.parse_counters(text)
 
 
-def test_the_counter_query_has_a_timeout(monkeypatch):
-    timeouts = []
+def test_the_counter_query_is_an_nvidia_smi_query_with_its_timeout(monkeypatch):
+    calls = []
 
     def run(argv, **kwargs):
-        timeouts.append(kwargs["timeout"])
+        calls.append((argv, kwargs))
         return tm.subprocess.CompletedProcess(argv, 0, stdout=PERF)
 
     monkeypatch.setattr(tm.subprocess, "run", run)
     assert tm.read_counters() == tm.parse_counters(PERF)
-    assert timeouts == [tm.COUNTERS_QUERY_TIMEOUT_S]
-
-
-def test_a_counter_query_that_times_out_fails_like_an_unreadable_counter(monkeypatch):
-    def run(argv, **kwargs):
-        raise tm.subprocess.TimeoutExpired(argv, kwargs["timeout"])
-
-    monkeypatch.setattr(tm.subprocess, "run", run)
-    with pytest.raises(RuntimeError, match=r"nvidia-smi -q -d PERFORMANCE did not answer"):
-        tm.read_counters()
+    kwargs = {"capture_output": True, "text": True, "check": True}
+    assert calls == [
+        (["nvidia-smi", "-q", "-d", "PERFORMANCE"], {**kwargs, "timeout": tm.NVIDIA_SMI_TIMEOUT_S})
+    ]

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Self
 
 from fp4bench import settings
+from fp4bench.telemetry import nvidia_smi
 
 WEIGHTS_GIB_RE = re.compile(r"Model loading took ([0-9.]+) GiB")
 CAPTURE_SIZES_RE = re.compile(r"cudagraph_capture_sizes['\"]?\s*[:=]\s*(\[[0-9,\s]*\])")
@@ -48,7 +49,6 @@ COMPILE_CACHE_HASH_RE = re.compile(r"torch_compile_cache/(?:torch_aot_compile/)?
 _AOT_DIR = "torch_aot_compile"
 STOP_GRACE_S = 120
 HEALTH_POLL_S = 5
-GPU_MEMORY_QUERY_TIMEOUT_S = 60  # a healthy nvidia-smi answers in about a second
 
 
 def parse_pass_config(body: str) -> dict[str, bool | None]:
@@ -129,13 +129,7 @@ def autotune_ran_fresh(facts: dict, cache_dir) -> bool:
 
 
 def gpu_memory_used_mib() -> int:
-    out = subprocess.run(
-        ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=GPU_MEMORY_QUERY_TIMEOUT_S,
-    ).stdout
+    out = nvidia_smi(("--query-gpu=memory.used", "--format=csv,noheader,nounits"))
     return int(out.strip().splitlines()[0])
 
 

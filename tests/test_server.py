@@ -11,6 +11,7 @@ import pytest
 
 from fp4bench import server as srv
 from fp4bench.server import VllmServer, parse_server_log
+from fp4bench.telemetry import NVIDIA_SMI_TIMEOUT_S
 from tests import vllm_logs as real
 
 MX_LOG_SNIPPET = """INFO 10-05 12:00:30 [gpu_model_runner.py:2900] Model loading took 13.2051 GiB memory and 41.2 seconds
@@ -565,7 +566,7 @@ def test_the_gpu_memory_query_has_a_timeout(smi):
     _, answers, timeouts = smi
     answers.append(1234)
     assert srv.gpu_memory_used_mib() == 1234
-    assert timeouts == [srv.GPU_MEMORY_QUERY_TIMEOUT_S]
+    assert timeouts == [NVIDIA_SMI_TIMEOUT_S]
 
 
 def test_a_timed_out_memory_query_is_an_unreadable_reading_and_the_wait_goes_on(smi):
@@ -573,14 +574,14 @@ def test_a_timed_out_memory_query_is_an_unreadable_reading_and_the_wait_goes_on(
     answers.extend([None, 4096, 100])
     srv.wait_gpu_released()
     assert len(timeouts) == 3
-    assert clock.now == srv.GPU_MEMORY_QUERY_TIMEOUT_S + 2 * 2
+    assert clock.now == NVIDIA_SMI_TIMEOUT_S + 2 * 2
 
 
 def test_memory_queries_that_always_time_out_fail_the_wait_at_its_monotonic_deadline(smi):
     clock, _, timeouts = smi
     with pytest.raises(RuntimeError, match="GPU memory was not released"):
         srv.wait_gpu_released(timeout_s=180)
-    assert 180 <= clock.now < 180 + srv.GPU_MEMORY_QUERY_TIMEOUT_S + 2
+    assert 180 <= clock.now < 180 + NVIDIA_SMI_TIMEOUT_S + 2
     assert len(timeouts) == 3
 
 

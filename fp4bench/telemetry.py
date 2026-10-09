@@ -2,7 +2,7 @@
 import re
 import subprocess
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Self
 
@@ -14,7 +14,7 @@ SAMPLER_QUERY = (
     "timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,"
     "utilization.gpu,clocks_event_reasons.active"
 )
-COUNTERS_QUERY_TIMEOUT_S = 60  # a healthy nvidia-smi answers in about a second
+NVIDIA_SMI_TIMEOUT_S = 60  # a healthy nvidia-smi answers in about a second
 
 
 def parse_counters(text: str) -> dict[ClockEvent, int]:
@@ -36,21 +36,15 @@ def parse_counters(text: str) -> dict[ClockEvent, int]:
     return counters
 
 
+def nvidia_smi(args: Sequence[str], timeout_s: float = NVIDIA_SMI_TIMEOUT_S) -> str:
+    """nvidia-smi's stdout; a failed query raises CalledProcessError, a hung one TimeoutExpired."""
+    return subprocess.run(
+        ["nvidia-smi", *args], capture_output=True, text=True, check=True, timeout=timeout_s
+    ).stdout
+
+
 def read_counters() -> dict[ClockEvent, int]:
-    try:
-        out = subprocess.run(
-            ["nvidia-smi", "-q", "-d", "PERFORMANCE"],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=COUNTERS_QUERY_TIMEOUT_S,
-        ).stdout
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            f"nvidia-smi -q -d PERFORMANCE did not answer within {COUNTERS_QUERY_TIMEOUT_S}s: "
-            "the clock event counters are unreadable"
-        ) from exc
-    return parse_counters(out)
+    return parse_counters(nvidia_smi(("-q", "-d", "PERFORMANCE")))
 
 
 def counter_delta(
