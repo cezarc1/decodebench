@@ -9,7 +9,7 @@ sizes).
 #### NVFP4 vs MXFP4 TL;DR — _Last updated October 2026_
 
 - **([Benchmark your workload](https://x.com/StasBekman/status/2107221020197429422?s=20))**.
-  Decode performance differences primarily depend on the kernels between the NVFP4 and MXFP4.
+  Decode performance differences seem to primarily depend on the kernel implementations for the dtypes, albeit we only tested NVFP4 and MXFP4 here. (TODO: test more)
 - **LLM Decode using small batches? NVFP4 is faster:** +7.1%, +7.5% and +4.2% decode throughput at
   batch 1, 8 and 32. The difference disappears at higher batch sizes for Qwen3-32B.
 - **GEMM-bound? (aka prefill/training)** On large GEMMs NVFP4 delivers ~9% more TFLOPS than MXFP4 in PyTorch
