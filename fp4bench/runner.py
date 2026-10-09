@@ -323,7 +323,9 @@ PROTOCOL_FIELDS_ADDED_FOR_EXPC = ("cells", "max_model_len", "hf_overrides")
 
 
 def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
-    """On a restart, every protocol field but `rounds` must match, and `rounds` may only rise."""
+    """On a restart, every protocol field but `rounds` must match, and `rounds` never falls
+    below an earlier start's: an extended run stays extended. A count above the study's that is
+    not its extension was never registered (study_to_run refuses it), so that run is a dead end."""
     lines = load_rows(run_dir / "manifests.jsonl", ManifestLine)
     if not lines:
         return
@@ -349,10 +351,16 @@ def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
         for r in ((line.protocol or {}).get("rounds") for line in lines)
         if isinstance(r, int) and not isinstance(r, bool)
     ]
-    if earlier and study.rounds < max(earlier):
+    if earlier and study.rounds < (recorded := max(earlier)):
+        lower = (
+            f"rounds {study.rounds} is lower than the {recorded} registered by an earlier "
+            f"start of this run"
+        )
         errors.append(
-            f"rounds {study.rounds} is lower than the {max(earlier)} registered by an "
-            f"earlier start of this run; pass --rounds {max(earlier)} (or more)"
+            f"{lower}; an extended run resumes with its extension: pass --rounds {recorded}"
+            if recorded == study.extension_rounds
+            else f"{lower}, which is not a registered count of {study.name}: this run cannot "
+            f"be resumed; start a new run id"
         )
     if errors:
         raise RuntimeError("; ".join(errors))

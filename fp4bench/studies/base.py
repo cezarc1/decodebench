@@ -60,6 +60,9 @@ class ServerSettings:
     gpu_memory_utilization: float = 0.90
     max_model_len: int = 4096
     hf_overrides: str = ""
+    # Not in Study.to_protocol_dict, so neither a restart nor study matching sees it change;
+    # recording it would change every manifest's protocol bytes. Every study serves 512.
+    max_num_seqs: int = 512
 
     def args(self) -> tuple[str, ...]:
         """The `vllm serve` arguments every treatment shares (METHODOLOGY.md#server-args)."""
@@ -69,8 +72,12 @@ class ServerSettings:
                 f"gpu_memory_utilization {self.gpu_memory_utilization!r} has more "
                 f"than two decimals; it would be served as {utilization}"
             )
-        if type(self.max_model_len) is not int or self.max_model_len <= 0:
-            raise ValueError(f"max_model_len must be a positive int, got {self.max_model_len!r}")
+        for name, value in (
+            ("max_model_len", self.max_model_len),
+            ("max_num_seqs", self.max_num_seqs),
+        ):
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive int, got {value!r}")
         args = (
             "--served-model-name",
             settings.SERVED_NAME,
@@ -81,7 +88,7 @@ class ServerSettings:
             "--max-model-len",
             str(self.max_model_len),
             "--max-num-seqs",
-            "512",
+            str(self.max_num_seqs),
             "--max-num-batched-tokens",
             "16384",
             "--gpu-memory-utilization",
@@ -143,6 +150,7 @@ class Study:
 
     def __post_init__(self) -> None:
         self._check_design()
+        self._check_capacity()
         self._check_rules()
         self._check_scan()
 
@@ -171,6 +179,30 @@ class Study:
             )
         if self.smoke and self.extension_rounds is not None:
             self._refuse("a smoke decides nothing, so it has no extension")
+
+    def _check_capacity(self) -> None:
+        if self.m1_reps + 1 > settings.M1_SETS:
+            self._refuse(
+                f"its {self.m1_reps} M1 reps and the warmup need {self.m1_reps + 1} prompt "
+                f"sets; there are {settings.M1_SETS} (settings.M1_SETS)"
+            )
+        on_m1 = (c.batch for c in self.cells if c.prompt_len == settings.M1_INPUT_LEN)
+        if (largest_on_m1 := max(on_m1, default=0)) > settings.M1_SET_SIZE:
+            self._refuse(
+                f"its largest batch on the M1 prompts ({largest_on_m1}) is above the "
+                f"{settings.M1_SET_SIZE} prompts of an M1 prompt set (settings.M1_SET_SIZE)"
+            )
+        if (largest := max(self.batches)) > self.server.max_num_seqs:
+            self._refuse(
+                f"its largest batch {largest} is above its server's {self.server.max_num_seqs} "
+                f"sequences (--max-num-seqs)"
+            )
+        longest = max(cell.prompt_len for cell in self.cells)
+        if (needed := longest + settings.M1_N2) > self.server.max_model_len:
+            self._refuse(
+                f"its longest prompt ({longest} tokens) and the {settings.M1_N2}-token N2 wave "
+                f"need a max_model_len of {needed}; its server's is {self.server.max_model_len}"
+            )
 
     def _check_rules(self) -> None:
         names = [r.name for r in self.ratios]

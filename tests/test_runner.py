@@ -1077,13 +1077,27 @@ def test_the_identity_check_runs_before_the_checkpoint_report_and_any_session(st
 
 
 def test_restart_with_fewer_rounds_than_an_earlier_start_is_refused(stubbed):
+    extended = replace(STUDY, extension_rounds=10)
     start(stubbed)
-    start(stubbed, with_rounds(10))
+    start(stubbed, replace(extended, rounds=10))
     stubbed.sessions.clear()
-    message, lines = refused_start(stubbed, "rounds", with_rounds(5))
+    message, lines = refused_start(stubbed, "rounds", replace(extended, rounds=5))
     assert "rounds 5 is lower than the 10 registered by an earlier start" in message
+    assert message.endswith("an extended run resumes with its extension: pass --rounds 10")
     assert stubbed.sessions == []
     assert len(lines) == 2
+
+
+def test_a_run_started_with_an_unregistered_round_count_cannot_be_resumed(stubbed):
+    extended = replace(STUDY, extension_rounds=10)
+    start(stubbed, replace(extended, rounds=12))
+    stubbed.sessions.clear()
+    message, _ = refused_start(stubbed, "rounds", replace(extended, rounds=10))
+    assert message.endswith(
+        "rounds 10 is lower than the 12 registered by an earlier start of this run, which is "
+        "not a registered count of test: this run cannot be resumed; start a new run id"
+    )
+    assert stubbed.sessions == []
 
 
 def test_restart_with_fewer_rounds_than_the_first_start_is_refused(stubbed):
@@ -2329,7 +2343,7 @@ CSTUDY = Study(
     name="test-c",
     treatments=(T.MX, T.NV),
     cells=(Cell(1, 6), Cell(4, 5), Cell(1, 9)),
-    server=ServerSettings(max_model_len=64, hf_overrides='{"max_position_embeddings": 64}'),
+    server=ServerSettings(max_model_len=2048, hf_overrides='{"max_position_embeddings": 2048}'),
     rounds=2,
     m1_reps=1,
     m2_duration_s=0,
@@ -2428,8 +2442,8 @@ def test_a_cell_session_serves_with_the_protocols_window_and_override(cells):
     run_cell_session(cells)
     args = cells.server.args
     assert args == (*CSTUDY.server.args(), *model.TREATMENTS[Treatment.NV].server_args)
-    assert args[args.index("--max-model-len") + 1] == "64"
-    assert args[args.index("--hf-overrides") + 1] == '{"max_position_embeddings": 64}'
+    assert args[args.index("--max-model-len") + 1] == "2048"
+    assert args[args.index("--hf-overrides") + 1] == '{"max_position_embeddings": 2048}'
     (row,) = load_jsonl(cells.run_dir / "servers.jsonl")
     assert row["server_argv"][3:] == list(args)
 
@@ -2565,8 +2579,8 @@ def test_the_manifest_of_a_cell_run_records_the_cell_prompt_files_sha256(cells):
     assert line["inputs"]["c_prompts_sha256"] == sha(settings.C_PROMPTS_PATH)
     assert line["inputs"]["m1_prompts_sha256"] == sha(settings.M1_PROMPTS_PATH)
     assert line["protocol"]["cells"] == [[1, 6], [4, 5], [1, 9]]
-    assert (line["protocol"]["max_model_len"], line["protocol"]["m2_duration_s"]) == (64, 0)
-    assert line["protocol"]["hf_overrides"] == '{"max_position_embeddings": 64}'
+    assert (line["protocol"]["max_model_len"], line["protocol"]["m2_duration_s"]) == (2048, 0)
+    assert line["protocol"]["hf_overrides"] == '{"max_position_embeddings": 2048}'
     assert line["problems"] == []
 
 

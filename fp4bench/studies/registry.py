@@ -28,9 +28,23 @@ FP8_KV_CACHE_DTYPES = frozenset(dtype for dtype in KvDtype if dtype.is_fp8)
 
 
 def study_to_run(name: str, rounds: int = 0) -> Study:
-    """The registered study `name`, with `rounds` rounds when that is above 0 (an extension)."""
+    """The registered study `name` with `rounds` rounds: 0 keeps its pre-registered count, and
+    any other value must be that count or its registered extension's (EXPERIMENT.md §8, §13, §16).
+    """
     study = STUDIES[name]
-    return replace(study, rounds=rounds) if rounds > 0 else study
+    if rounds in (0, study.rounds):
+        return study
+    extension = study.extension_rounds
+    if rounds != extension:
+        rule = (
+            " and has no extension"
+            if extension is None
+            else f", and the only pre-registered change is extending (to {extension})"
+        )
+        raise ValueError(
+            f"{rounds} is not a pre-registered round count of {name}: it runs {study.rounds}{rule}"
+        )
+    return replace(study, rounds=rounds)
 
 
 def recorded_protocol(manifest: ManifestLine | None) -> dict[str, Any]:

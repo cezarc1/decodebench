@@ -158,16 +158,19 @@ def test_run_checks_rerun_rounds_against_the_rounds_it_will_run(fake):
 
 
 @pytest.mark.parametrize("name", list(STUDIES))
-def test_a_study_with_a_registered_extension_may_only_gain_rounds(fake, name):
+def test_a_run_takes_only_the_studys_pre_registered_rounds_or_its_extension(fake, name):
     study = STUDIES[name]
-    below = invoke("run", name, "--run-id", "x-1", "--rounds", str(study.rounds - 1))
-    if study.extension_rounds is not None:
-        refused(below, "--rounds", "pre-registered", f"(to {study.extension_rounds})")
-    else:
-        assert below.exit_code == 0, below.output
-    for more in (study.rounds, study.rounds + 1, 10, 12):
-        assert invoke("run", name, "--run-id", "x-1", "--rounds", str(more)).exit_code == 0
-    assert all(c[0] == "run" for c in fake.calls)
+    registered = {r for r in (0, study.rounds, study.extension_rounds) if r is not None}
+    rule = (
+        "has no extension" if study.extension_rounds is None else f"(to {study.extension_rounds})"
+    )
+    for rounds in sorted(registered):
+        result = invoke("run", name, "--run-id", "x-1", "--rounds", str(rounds))
+        assert result.exit_code == 0, result.output
+    for rounds in sorted({study.rounds - 1, study.rounds + 1, 7, 12} - registered):
+        result = invoke("run", name, "--run-id", "x-1", "--rounds", str(rounds))
+        refused(result, "--rounds", f"{rounds} is not a pre-registered round count of {name}", rule)
+    assert [c[3] for c in fake.calls] == sorted(registered)
     assert {n for n, s in STUDIES.items() if s.extension_rounds} == {"full", "expb", "expc"}
 
 
@@ -239,14 +242,14 @@ def test_run_local_runs_the_study_against_the_local_directories(fake, local, tmp
         "--local-dir",
         str(tmp_path / "scratch"),
         "--rounds",
-        "2",
-        "--rerun-rounds",
         "1",
+        "--rerun-rounds",
+        "0",
     )
     assert result.exit_code == 0, result.output
     (executor,) = local
     assert executor.paths == (tmp_path / "data", tmp_path / "res", tmp_path / "scratch")
-    assert executor.calls == [("smoke-nf", "nf-1", 2, (1,), CODE)]
+    assert executor.calls == [("smoke-nf", "nf-1", 1, (0,), CODE)]
     assert f"done: {tmp_path / 'res' / 'nf-1'}" in result.output and fake.calls == []
 
 

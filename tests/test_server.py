@@ -2,6 +2,7 @@ import contextlib
 import os
 import signal
 import socket
+import subprocess
 import sys
 import time
 
@@ -9,6 +10,7 @@ import pytest
 
 from fp4bench import server as srv
 from fp4bench.server import VllmServer, parse_server_log
+from fp4bench.telemetry import NVIDIA_SMI_TIMEOUT_S
 from tests import vllm_logs as real
 
 MX_LOG_SNIPPET = """INFO 10-05 12:00:30 [gpu_model_runner.py:2900] Model loading took 13.2051 GiB memory and 41.2 seconds
@@ -522,6 +524,88 @@ def test_stop_escalates_to_sigkill_when_sigint_is_ignored(make_server, monkeypat
     server.stop()
     assert 1 <= time.time() - started < 20
     assert _group_gone(pgid)
+
+
+class JumpingClock:
+    """A monotonic clock that `sleep` advances and every read moves on by `tick`, so a deadline
+    is always reached; the wall clock jumps an hour on every read."""
+
+    def __init__(self, tick=0.001):
+        self.now, self.wall, self.tick = 0.0, 0.0, tick
+
+    def monotonic(self):
+        self.now += self.tick
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
+
+    def time(self):
+        self.wall += 3600
+        return self.wall
+
+
+@pytest.fixture
+def smi(monkeypatch):
+    """nvidia-smi's memory.used answers in turn; None is a query that times out."""
+    clock, answers, timeouts = JumpingClock(), [], []
+
+    def nvidia_smi(args, timeout_s):
+        assert args == ("--query-gpu=memory.used", "--format=csv,noheader,nounits")
+        timeouts.append(timeout_s)
+        answer = answers.pop(0) if answers else None
+        if answer is None:
+            clock.now += timeout_s
+            raise subprocess.TimeoutExpired(["nvidia-smi", *args], timeout_s)
+        return f"{answer}\n"
+
+    monkeypatch.setattr(srv, "time", clock)
+    monkeypatch.setattr(srv, "nvidia_smi", nvidia_smi)
+    return clock, answers, timeouts
+
+
+def test_the_gpu_memory_query_has_a_timeout(smi):
+    _, answers, timeouts = smi
+    answers.append(1234)
+    assert srv.gpu_memory_used_mib() == 1234
+    assert timeouts == [NVIDIA_SMI_TIMEOUT_S]
+
+
+def test_a_timed_out_memory_query_is_an_unreadable_reading_and_the_wait_goes_on(smi):
+    clock, answers, timeouts = smi
+    answers.extend([None, 4096, 100])
+    srv.wait_gpu_released()
+    assert len(timeouts) == 3
+    assert clock.now == pytest.approx(NVIDIA_SMI_TIMEOUT_S + 2 * 2, abs=0.01)
+
+
+@pytest.mark.parametrize("timeout_s", [180, 61, 0.5])
+def test_memory_queries_that_always_time_out_fail_the_wait_at_its_monotonic_deadline(
+    smi, timeout_s
+):
+    clock, _, timeouts = smi
+    with pytest.raises(RuntimeError, match="GPU memory was not released"):
+        srv.wait_gpu_released(timeout_s=timeout_s)
+    assert timeout_s <= clock.now <= timeout_s + 1
+    assert all(1 <= t <= NVIDIA_SMI_TIMEOUT_S for t in timeouts)
+
+
+def test_a_held_gpu_fails_the_wait_without_sleeping_past_its_deadline(smi):
+    clock, answers, _ = smi
+    answers.extend([4096] * 10)
+    with pytest.raises(RuntimeError, match="GPU memory was not released"):
+        srv.wait_gpu_released(timeout_s=5)
+    assert clock.now == pytest.approx(5, abs=0.01)
+
+
+def test_the_health_deadline_is_monotonic_so_a_wall_clock_jump_does_not_end_it(
+    make_server, monkeypatch
+):
+    monkeypatch.setattr(srv, "time", JumpingClock(tick=1.0))
+    port = _closed_port()
+    server = make_server(_healthy_command(port), port=port, timeout_s=300)
+    with server:
+        assert server.proc.poll() is None
 
 
 NV_PASS_CONFIG = {

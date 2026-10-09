@@ -1322,8 +1322,8 @@ protocols ([§11][e11], 2026-10-04).
   after `prepare --force`, a re-quantize or a fetch would silently mix prompts or checkpoints.
 - **Rounds.**
   - `--rounds` 0 keeps the study's count.
-  - A study with a registered extension (full, expb and expc, to 10) may only gain rounds; the
-    same `--rounds` must be passed on every restart.
+  - Any other value must be the study's count or its registered extension (full, expb and expc,
+    to 10); the same `--rounds` must be passed on every restart.
   - `--rerun-rounds` re-runs complete rounds whole (for example after a G4 flag), without editing
     `servers.jsonl`; analysis keeps the latest session per (round, treatment).
   - The values must lie in 0 … rounds−1.
