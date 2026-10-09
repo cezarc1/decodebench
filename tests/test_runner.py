@@ -657,6 +657,18 @@ def test_a_restart_at_another_or_an_unverifiable_code_version_is_refused_before_
     assert not (stubbed.run_dir / "errors.jsonl").exists()
 
 
+def test_a_baseline_with_a_commit_but_no_code_dirty_is_refused(stubbed, monkeypatch):
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    start(stubbed)
+    lines = load_jsonl(stubbed.run_dir / "manifests.jsonl")
+    del lines[0]["code_dirty"]
+    write_jsonl(stubbed.run_dir / "manifests.jsonl", lines)
+    stubbed.calls.clear()
+    message, lines = refused_start(stubbed, "a run is one code version; start a new run id")
+    assert f"({CodeVersion(SHA_A, None).describe()})" in message
+    assert stubbed.calls == [] and len(lines) == 1
+
+
 def test_the_code_is_checked_against_the_first_start_that_passed_its_checks(stubbed, monkeypatch):
     stubbed.problems = [VLLM_MISMATCH]
     at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
