@@ -54,6 +54,9 @@ class Contrast:
     arm: Arm
 
 
+MAX_NUM_SEQS = 512
+
+
 @dataclass(frozen=True)
 class ServerSettings:
     kv_dtype: KvDtype = KvDtype.BF16
@@ -81,7 +84,7 @@ class ServerSettings:
             "--max-model-len",
             str(self.max_model_len),
             "--max-num-seqs",
-            "512",
+            str(MAX_NUM_SEQS),
             "--max-num-batched-tokens",
             "16384",
             "--gpu-memory-utilization",
@@ -143,6 +146,7 @@ class Study:
 
     def __post_init__(self) -> None:
         self._check_design()
+        self._check_capacity()
         self._check_rules()
         self._check_scan()
 
@@ -171,6 +175,30 @@ class Study:
             )
         if self.smoke and self.extension_rounds is not None:
             self._refuse("a smoke decides nothing, so it has no extension")
+
+    def _check_capacity(self) -> None:
+        if self.m1_reps + 1 > settings.M1_SETS:
+            self._refuse(
+                f"its {self.m1_reps} M1 reps and the warmup need {self.m1_reps + 1} prompt "
+                f"sets; there are {settings.M1_SETS} (settings.M1_SETS)"
+            )
+        largest = max(self.batches)
+        if largest > settings.M1_SET_SIZE:
+            self._refuse(
+                f"its largest batch {largest} is above the {settings.M1_SET_SIZE} prompts of a "
+                f"prompt set (settings.M1_SET_SIZE)"
+            )
+        if largest > MAX_NUM_SEQS:
+            self._refuse(
+                f"its largest batch {largest} is above the server's {MAX_NUM_SEQS} sequences "
+                f"(--max-num-seqs)"
+            )
+        longest = max(cell.prompt_len for cell in self.cells)
+        if (needed := longest + settings.M1_N2) > self.server.max_model_len:
+            self._refuse(
+                f"its longest prompt ({longest} tokens) and the {settings.M1_N2}-token N2 wave "
+                f"need a max_model_len of {needed}; its server's is {self.server.max_model_len}"
+            )
 
     def _check_rules(self) -> None:
         names = [r.name for r in self.ratios]

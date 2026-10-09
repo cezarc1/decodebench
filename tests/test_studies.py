@@ -8,7 +8,7 @@ import pytest
 from fp4bench import settings
 from fp4bench.core.schema import ManifestLine, load_rows
 from fp4bench.core.types import Cell, KvDtype, Treatment
-from fp4bench.studies import model
+from fp4bench.studies import base, model
 from fp4bench.studies.base import (
     Prompts,
     ServerSettings,
@@ -564,6 +564,43 @@ def test_every_study_is_runnable_with_the_configured_treatments_and_prompts(name
         assert cell.prompt_len + settings.M1_N2 <= max_model_len
 
 
+def test_a_study_refuses_more_m1_reps_than_the_prompt_sets_after_the_warmup_set():
+    assert replace(FULL, m1_reps=settings.M1_SETS - 1).m1_reps == 5
+    with pytest.raises(
+        ValueError,
+        match=r"^study full: its 6 M1 reps and the warmup need 7 prompt sets; "
+        r"there are 6 \(settings.M1_SETS\)$",
+    ):
+        replace(FULL, m1_reps=settings.M1_SETS)
+
+
+def test_a_study_refuses_a_batch_above_the_prompt_sets_or_the_servers_max_num_seqs(monkeypatch):
+    assert max(EXPB.batches) == settings.M1_SET_SIZE == base.MAX_NUM_SEQS == 512
+    with pytest.raises(
+        ValueError,
+        match=r"^study expb: its largest batch 513 is above the 512 prompts of a prompt set "
+        r"\(settings.M1_SET_SIZE\)$",
+    ):
+        replace(EXPB, cells=cells_at(1024, (128, 256, 513)), primary_batches=(256,))
+    monkeypatch.setattr(base, "MAX_NUM_SEQS", 256)
+    with pytest.raises(
+        ValueError, match=r"^study expb: its largest batch 512 is above the server's 256 "
+    ):
+        replace(EXPB)
+    assert replace(EXPB, cells=cells_at(1024, (128, 256)), primary_batches=(256,))
+
+
+def test_a_study_refuses_a_longest_prompt_and_n2_wave_beyond_the_servers_max_model_len():
+    needed = 127360 + settings.M1_N2
+    assert replace(EXPC, server=replace(EXPC.server, max_model_len=needed))
+    with pytest.raises(
+        ValueError,
+        match=rf"^study expc: its longest prompt \(127360 tokens\) and the {settings.M1_N2}-token "
+        rf"N2 wave need a max_model_len of {needed}; its server's is {needed - 1}$",
+    ):
+        replace(EXPC, server=replace(EXPC.server, max_model_len=needed - 1))
+
+
 def test_m2_runs_at_the_batches_of_the_studies_with_m2():
     assert FULL.m2_batches() == (1, 8, 32, 64, 128)
     assert EXPB.m2_batches() == (128, 256, 512)
@@ -595,6 +632,7 @@ def test_the_kv_capacity_experiment_c_needs_is_its_largest_cells_wave():
         name="x",
         treatments=(T.MX,),
         cells=(Cell(1, 127360),),
+        server=EXPC.server,
         prompts=Prompts.CELLS,
         primary_batches=(1,),
     )
