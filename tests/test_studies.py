@@ -766,6 +766,12 @@ def test_server_args_refuses_a_context_window_that_is_not_a_positive_int(bad):
         ServerSettings(max_model_len=bad).args()
 
 
+@pytest.mark.parametrize("bad", [0, -512, 512.0, True, "512"])
+def test_server_args_refuses_a_sequence_limit_that_is_not_a_positive_int(bad):
+    with pytest.raises(ValueError, match=rf"^max_num_seqs must be a positive int, got {bad!r}$"):
+        ServerSettings(max_num_seqs=bad).args()
+
+
 def test_server_args_refuses_a_memory_fraction_it_cannot_write_exactly():
     assert "0.85" in ServerSettings(gpu_memory_utilization=0.85).args()
     with pytest.raises(ValueError, match="gpu_memory_utilization"):

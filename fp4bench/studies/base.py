@@ -60,6 +60,8 @@ class ServerSettings:
     gpu_memory_utilization: float = 0.90
     max_model_len: int = 4096
     hf_overrides: str = ""
+    # Not in Study.to_protocol_dict, so neither a restart nor study matching sees it change;
+    # recording it would change every manifest's protocol bytes. Every study serves 512.
     max_num_seqs: int = 512
 
     def args(self) -> tuple[str, ...]:
@@ -70,8 +72,12 @@ class ServerSettings:
                 f"gpu_memory_utilization {self.gpu_memory_utilization!r} has more "
                 f"than two decimals; it would be served as {utilization}"
             )
-        if type(self.max_model_len) is not int or self.max_model_len <= 0:
-            raise ValueError(f"max_model_len must be a positive int, got {self.max_model_len!r}")
+        for name, value in (
+            ("max_model_len", self.max_model_len),
+            ("max_num_seqs", self.max_num_seqs),
+        ):
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive int, got {value!r}")
         args = (
             "--served-model-name",
             settings.SERVED_NAME,
