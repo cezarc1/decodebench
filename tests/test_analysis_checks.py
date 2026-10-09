@@ -380,11 +380,15 @@ def test_the_served_argv_flag_forms():
     assert "--max-model-len" in c_argv("MX")
 
 
-def test_a_served_flag_without_a_value_is_a_problem():
+def test_a_served_flag_without_a_value_is_a_problem_and_the_other_flags_are_still_checked():
     rows = [c_session(1, "NV")]
-    rows[0]["server_argv"].append("--max-model-len")
-    (problem,) = ck.server_argv_check(cl.sessions_of(typed_servers(rows))).problems
-    assert problem.startswith("round 1 NV: ") and "--max-model-len" in problem
+    argv = rows[0]["server_argv"]
+    argv[argv.index("--hf-overrides") + 1] = '{"max_position_embeddings": 65536}'
+    argv.extend(["--rope-parameters", "{}", "--max-model-len"])
+    window, override, rope = ck.server_argv_check(cl.sessions_of(typed_servers(rows))).problems
+    assert window.startswith("round 1 NV: --max-model-len has no value")
+    assert override.startswith("round 1 NV: served --hf-overrides")
+    assert rope == "round 1 NV: the served argv mentions rope_parameters"
 
 
 def test_the_nll_crosscheck_compares_with_the_main_run_and_its_windows():

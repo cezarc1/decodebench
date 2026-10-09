@@ -1,11 +1,12 @@
-"""Command-line arguments read as vLLM's argument parser reads them."""
+"""A flag's value in a server command line."""
 
 from collections.abc import Sequence
 
 
 def flag_value(argv: Sequence[str], flag: str) -> str | None:
-    """The value of the last `flag` ("--flag value" or "--flag=value"), None if absent; a `flag`
-    with no value after it raises ValueError."""
+    """The value of `flag` written "--flag value" or "--flag=value", the last occurrence winning
+    as in vLLM; None if absent, and ValueError for a `flag` with nothing after it. vLLM's other
+    spellings (dotted "--compilation-config.x", "-O", underscores) are not read."""
     value = None
     for i, arg in enumerate(argv):
         if arg == flag:
