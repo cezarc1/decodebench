@@ -48,6 +48,7 @@ COMPILE_CACHE_HASH_RE = re.compile(r"torch_compile_cache/(?:torch_aot_compile/)?
 _AOT_DIR = "torch_aot_compile"
 STOP_GRACE_S = 120
 HEALTH_POLL_S = 5
+GPU_MEMORY_QUERY_TIMEOUT_S = 60  # a healthy nvidia-smi answers in about a second
 
 
 def parse_pass_config(body: str) -> dict[str, bool | None]:
@@ -133,15 +134,18 @@ def gpu_memory_used_mib() -> int:
         capture_output=True,
         text=True,
         check=True,
+        timeout=GPU_MEMORY_QUERY_TIMEOUT_S,
     ).stdout
     return int(out.strip().splitlines()[0])
 
 
 def wait_gpu_released(threshold_mib: int = 2048, timeout_s: float = 180) -> None:
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        if gpu_memory_used_mib() < threshold_mib:
-            return
+    """A query that times out is an unreadable reading: not released yet."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            if gpu_memory_used_mib() < threshold_mib:
+                return
         time.sleep(2)
     raise RuntimeError("GPU memory was not released after server shutdown")
 
@@ -198,8 +202,8 @@ class VllmServer:
             env={**os.environ, **self.env} if self.env else None,
         )
         self._pgid = self.proc.pid
-        deadline = time.time() + timeout_s
-        while time.time() < deadline:
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
             if self.proc.poll() is not None:
                 raise RuntimeError(
                     f"vllm serve exited with {self.proc.returncode}; see {self.log_path}"
@@ -211,7 +215,7 @@ class VllmServer:
             except OSError:
                 pass
             with contextlib.suppress(subprocess.TimeoutExpired):
-                self.proc.wait(timeout=min(HEALTH_POLL_S, max(0.0, deadline - time.time())))
+                self.proc.wait(timeout=min(HEALTH_POLL_S, max(0.0, deadline - time.monotonic())))
         raise TimeoutError(f"vllm serve not healthy after {timeout_s}s; see {self.log_path}")
 
     def stop(self) -> None:

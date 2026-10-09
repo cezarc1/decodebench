@@ -165,3 +165,24 @@ def test_a_missing_counter_is_named_as_nvidia_smi_prints_it():
     text = PERF.replace("HW Power Braking", "HW Something Else")
     with pytest.raises(ValueError, match=r"^missing counters: \['HW Power Braking'\]$"):
         tm.parse_counters(text)
+
+
+def test_the_counter_query_has_a_timeout(monkeypatch):
+    timeouts = []
+
+    def run(argv, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        return tm.subprocess.CompletedProcess(argv, 0, stdout=PERF)
+
+    monkeypatch.setattr(tm.subprocess, "run", run)
+    assert tm.read_counters() == tm.parse_counters(PERF)
+    assert timeouts == [tm.COUNTERS_QUERY_TIMEOUT_S]
+
+
+def test_a_counter_query_that_times_out_fails_like_an_unreadable_counter(monkeypatch):
+    def run(argv, **kwargs):
+        raise tm.subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    monkeypatch.setattr(tm.subprocess, "run", run)
+    with pytest.raises(RuntimeError, match=r"nvidia-smi -q -d PERFORMANCE did not answer"):
+        tm.read_counters()

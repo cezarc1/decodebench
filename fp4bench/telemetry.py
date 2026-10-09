@@ -14,6 +14,7 @@ SAMPLER_QUERY = (
     "timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,"
     "utilization.gpu,clocks_event_reasons.active"
 )
+COUNTERS_QUERY_TIMEOUT_S = 60  # a healthy nvidia-smi answers in about a second
 
 
 def parse_counters(text: str) -> dict[ClockEvent, int]:
@@ -36,9 +37,19 @@ def parse_counters(text: str) -> dict[ClockEvent, int]:
 
 
 def read_counters() -> dict[ClockEvent, int]:
-    out = subprocess.run(
-        ["nvidia-smi", "-q", "-d", "PERFORMANCE"], capture_output=True, text=True, check=True
-    ).stdout
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "-q", "-d", "PERFORMANCE"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=COUNTERS_QUERY_TIMEOUT_S,
+        ).stdout
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"nvidia-smi -q -d PERFORMANCE did not answer within {COUNTERS_QUERY_TIMEOUT_S}s: "
+            "the clock event counters are unreadable"
+        ) from exc
     return parse_counters(out)
 
 
