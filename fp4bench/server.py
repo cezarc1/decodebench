@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Self
 
 from fp4bench import settings
-from fp4bench.telemetry import nvidia_smi
+from fp4bench.telemetry import NVIDIA_SMI_TIMEOUT_S, nvidia_smi
 
 WEIGHTS_GIB_RE = re.compile(r"Model loading took ([0-9.]+) GiB")
 CAPTURE_SIZES_RE = re.compile(r"cudagraph_capture_sizes['\"]?\s*[:=]\s*(\[[0-9,\s]*\])")
@@ -128,19 +128,20 @@ def autotune_ran_fresh(facts: dict, cache_dir) -> bool:
     )
 
 
-def gpu_memory_used_mib() -> int:
-    out = nvidia_smi(("--query-gpu=memory.used", "--format=csv,noheader,nounits"))
+def gpu_memory_used_mib(timeout_s: float = NVIDIA_SMI_TIMEOUT_S) -> int:
+    out = nvidia_smi(("--query-gpu=memory.used", "--format=csv,noheader,nounits"), timeout_s)
     return int(out.strip().splitlines()[0])
 
 
 def wait_gpu_released(threshold_mib: int = 2048, timeout_s: float = 180) -> None:
     """A query that times out is an unreadable reading: not released yet."""
     deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
+    while (left := deadline - time.monotonic()) > 0:
         with contextlib.suppress(subprocess.TimeoutExpired):
-            if gpu_memory_used_mib() < threshold_mib:
+            if gpu_memory_used_mib(min(NVIDIA_SMI_TIMEOUT_S, max(1, left))) < threshold_mib:
                 return
-        time.sleep(2)
+        if (left := deadline - time.monotonic()) > 0:
+            time.sleep(min(2, left))
     raise RuntimeError("GPU memory was not released after server shutdown")
 
 

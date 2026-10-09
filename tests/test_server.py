@@ -5,7 +5,6 @@ import socket
 import subprocess
 import sys
 import time
-from types import SimpleNamespace
 
 import pytest
 
@@ -577,21 +576,29 @@ def test_a_timed_out_memory_query_is_an_unreadable_reading_and_the_wait_goes_on(
     assert clock.now == NVIDIA_SMI_TIMEOUT_S + 2 * 2
 
 
-def test_memory_queries_that_always_time_out_fail_the_wait_at_its_monotonic_deadline(smi):
+@pytest.mark.parametrize("timeout_s", [180, 61, 0.5])
+def test_memory_queries_that_always_time_out_fail_the_wait_at_its_monotonic_deadline(
+    smi, timeout_s
+):
     clock, _, timeouts = smi
     with pytest.raises(RuntimeError, match="GPU memory was not released"):
-        srv.wait_gpu_released(timeout_s=180)
-    assert 180 <= clock.now < 180 + NVIDIA_SMI_TIMEOUT_S + 2
-    assert len(timeouts) == 3
+        srv.wait_gpu_released(timeout_s=timeout_s)
+    assert timeout_s <= clock.now <= timeout_s + 1
+    assert all(1 <= t <= NVIDIA_SMI_TIMEOUT_S for t in timeouts)
+
+
+def test_a_held_gpu_fails_the_wait_without_sleeping_past_its_deadline(smi):
+    clock, answers, _ = smi
+    answers.extend([4096] * 10)
+    with pytest.raises(RuntimeError, match="GPU memory was not released"):
+        srv.wait_gpu_released(timeout_s=5)
+    assert clock.now == 5
 
 
 def test_the_health_deadline_is_monotonic_so_a_wall_clock_jump_does_not_end_it(
     make_server, monkeypatch
 ):
-    wall = iter(range(0, 10**9, 3600))
-    monkeypatch.setattr(
-        srv, "time", SimpleNamespace(monotonic=time.monotonic, time=lambda: next(wall))
-    )
+    monkeypatch.setattr(srv, "time", JumpingClock())
     port = _closed_port()
     server = make_server(_healthy_command(port), port=port, timeout_s=20)
     with server:
