@@ -7,16 +7,33 @@ Benchmark realistic production-like workloads on non GEMM-bound tasks.
 
 #### NVFP4 vs MXFP4 TL;DR — _Last updated October 2026_
 
-- **([Benchmark your workload](https://x.com/StasBekman/status/2107221020197429422?s=20))**.
-  Decode performance differences seem to primarily depend on the kernel implementations for the dtypes, albeit we only tested NVFP4 and MXFP4 here on a B200 (SM100) using a 32B param model w/ a KV Cache. (TODO: test more)
-- **LLM Decode using small batches? NVFP4 is faster:** +7.1%, +7.5% and +4.2% decode throughput at
-  batch 1, 8 and 32. The difference disappears at higher batch sizes for Qwen3-32B. We can infer that the lack of difference is due to memory bandwidth saturation but we have not confirmed. 
-- **GEMM-bound? (aka prefill/training)** On large GEMMs NVFP4 delivers ~9% more TFLOPS than MXFP4 in PyTorch
-  ([Stas's MAMF numbers](https://github.com/stas00/ml-engineering/blob/master/training/dtype.md#fp4-formats)).
+If you're using a B200 GPU all of the evidence points to always preferring NVFP4 over MXFP4, by a non-significant margin, on
+both GEMM-bound workloads as well as low-batch decode workloads. Additionally, quantization from bf16 to the respective formats indicate that nvfp4 should additionally yield non-trivial superior eval perf. 
+However, you should always strive to [benchmark your actual production configuration](https://x.com/StasBekman/status/2107221020197429422?s=20).
+
+- **Kernel implementation details dominate, not the format.** On a B200 (SM100) with vLLM v0.31, the
+  NVFP4/MXFP4 decode perf difference mostly comes from the kernel implementation, and not from the formats'
+  4.5 vs 4.25 bits difference. Note that we tested this on only one dense model (Qwen3-32B, w/ bf16 KV).
+- **@ small-batch decode: NVFP4 is meaningfully faster.** +7.1%, +7.6% and +4.2% decode throughput at
+  batch 1, 8 and 32. Worth highlighting here that decode for this workload is neither bandwidth-bound (~40–50% of theoretical
+  HBM bandwidth) nor compute-bound (the GEMMs are tiny), so kernel implementation differences dominate.
+  NVFP4's superior perf here seems to come mostly from the kernels around the GEMMs (activation
+  quantization, fewer kernels per step, etc).
+- **@ Batch ≥ 64: there is no meaningful difference**, so you might as well pick the format based on eval
+  perf, portability or other concerns if you're in this regime.
+- **Batch size dominates the perf difference, not HBM memory bandwidth.** NVFP4's non-GEMM kernels stay
+  faster, but it's GEMMs fall behind MXFP4's as they grow in size, and from batch 64 up the two cancel each other
+  out.
+- **Large GEMMs (prefill/training) depend heavily on the kernel implementation.** In PyTorch, NVFP4 gets
+  ~9% more TFLOPS ([ml-engineering book](https://github.com/stas00/ml-engineering/blob/master/training/dtype.md#fp4-formats)),
+  but there NVFP4 runs on cuBLASLt and MXFP4 on a different library (MSLK). In vLLM's kernels (CuTe-DSL),
+  NVFP4's largest GEMMs were from 4% to 20% slower @ batch 512.
 - **Serve NVFP4 on vLLM's default kernel**, CuTe-DSL (`--linear-backend flashinfer_cutedsl`). On
-  the cuDNN kernel (`flashinfer_cudnn`) the same weights are 10–18% slower and lose to MXFP4.
-  Dense MXFP4 falls back to FlashInfer's `mm_fp4` (CuTe-DSL).
-- **NVFP4 is also more accurate:** its NLL penalty over BF16 is 2.7× smaller. TBD if this difference transfers to actual eval differences.
+  cuDNN (`flashinfer_cudnn`) the same weights are between 10 to 18% slower and lose to MXFP4 @ every batch
+  size. MXFP4 only has a single W4A4 kernel in vLLM 0.31 (FlashInfer CuTe-DSL, aka `mm_fp4`).
+- **NVFP4 is more accurate:** its NLL penalty over BF16 is 2.7× smaller (0.051 vs 0.136
+  nats/token). No evals were run, however the lower NLL (negative log-likelihood) suggests
+  that NVFP4 should yield better eval results.
 
 ![NVFP4 vs MXFP4 decode throughput on B200, by batch size and by kernel](docs/figures/nvfp4_vs_mxfp4_decode_b200.png)
 
