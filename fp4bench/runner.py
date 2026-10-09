@@ -47,7 +47,7 @@ from fp4bench.core.types import (
 )
 from fp4bench.decode_step import decode_block
 from fp4bench.lib_bench import run_lib_decode
-from fp4bench.manifest import collect_manifest, gpu_info, verify_manifest
+from fp4bench.manifest import CodeVersion, collect_manifest, gpu_info, verify_manifest
 from fp4bench.metrics import READ, read_preemptions, read_preemptions_retrying
 from fp4bench.prep import FETCH_FILE
 from fp4bench.prompts import check_cell_prompt_sets
@@ -366,6 +366,29 @@ def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
         raise RuntimeError("; ".join(errors))
 
 
+def check_code_unchanged(run_dir: Path, code: CodeVersion) -> None:
+    """On a restart, the code must be the first start's commit, both checkouts clean."""
+    lines = load_rows(run_dir / "manifests.jsonl", ManifestLine)
+    if not lines:
+        return
+    first = lines[0]
+    if "code_commit" in first.missing:
+        print(
+            f"warning: the first start of this run predates code_commit in its manifest, so this "
+            f"start's code version ({code.describe()}) cannot be checked against it",
+            file=sys.stderr,
+        )
+        return
+    then = CodeVersion(first.code_commit, first.code_dirty)
+    if not (then.is_clean and code == then):
+        raise RuntimeError(
+            f"this start's code ({code.describe()}) is not verifiably the first start's "
+            f"({then.describe()}): a restart must run the same commit from a clean checkout, as "
+            "uncommitted or unknown changes cannot be compared; a run is one code version; "
+            "start a new run id"
+        )
+
+
 def _identity(inputs: dict) -> dict:
     out = dict(inputs)
     for kind in (CheckpointKind.MX, CheckpointKind.NV):
@@ -638,6 +661,7 @@ def run_experiment(
         raise ValueError(f"rerun_rounds {bad} outside the protocol's rounds 0..{study.rounds - 1}")
     run_dir.mkdir(parents=True, exist_ok=True)
     check_protocol_unchanged(run_dir, study)
+    check_code_unchanged(run_dir, CodeVersion.from_env())
     manifest = collect_manifest()
     problems = verify_manifest(manifest)
     inputs = collect_inputs(study)

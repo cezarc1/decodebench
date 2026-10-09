@@ -18,6 +18,7 @@ from fp4bench.core.schema import (
     load_rows,
 )
 from fp4bench.core.types import Cell, KvDtype, ProbeError, RetryPolicy, Treatment
+from fp4bench.manifest import CODE_COMMIT_ENV, CODE_DIRTY_ENV, CodeVersion
 from fp4bench.runner import rounds_to_run
 from fp4bench.studies import model
 from fp4bench.studies.base import Prompts, ServerSettings, Study, cells_at
@@ -184,6 +185,7 @@ def env(monkeypatch, tmp_path):
         blocks=[],
         m2_calls=[],
         cell_prompts=[],
+        code=None,
     )
 
     class FakeProc:
@@ -250,8 +252,12 @@ def env(monkeypatch, tmp_path):
         return {"uuid": "GPU-1"}
 
     def collect_manifest():
+        """No code version unless a test set `code`, like a manifest from before code_commit."""
         st.calls.append("collect")
-        return {"utc": "2026-10-04T00:00:00+00:00", "gpu": {"name": "NVIDIA B200"}}
+        code = (
+            {} if st.code is None else {"code_commit": st.code.commit, "code_dirty": st.code.dirty}
+        )
+        return {"utc": "2026-10-04T00:00:00+00:00", "gpu": {"name": "NVIDIA B200"}, **code}
 
     def verify_manifest(manifest):
         st.calls.append("verify")
@@ -604,6 +610,64 @@ def test_protocol_check_survives_a_truncated_manifest_tail(stubbed):
     with (stubbed.run_dir / "manifests.jsonl").open("a") as f:
         f.write('{"utc": "2026-10-04T01:')
     assert len(start(stubbed)) == 2
+
+
+SHA_A, SHA_B = "a" * 40, "b" * 40
+
+
+def at_code(env, monkeypatch, code: CodeVersion) -> None:
+    """Later starts run at `code`: the runner reads it from the environment the executors set,
+    and the fake manifest records it as collect_manifest does."""
+    env.code = code
+    for key in (CODE_COMMIT_ENV, CODE_DIRTY_ENV):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in code.env().items():
+        monkeypatch.setenv(key, value)
+
+
+def test_a_restart_at_the_first_starts_commit_from_clean_checkouts_is_allowed(stubbed, monkeypatch):
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    start(stubbed)
+    lines = start(stubbed)
+    assert [(m["code_commit"], m["code_dirty"]) for m in lines] == [(SHA_A, False)] * 2
+
+
+@pytest.mark.parametrize(
+    "first, now",
+    [
+        pytest.param(CodeVersion(SHA_A, False), CodeVersion(SHA_B, False), id="other-commit"),
+        pytest.param(CodeVersion(SHA_A, False), CodeVersion(SHA_A, True), id="dirty-now"),
+        pytest.param(CodeVersion(SHA_A, True), CodeVersion(SHA_A, True), id="dirty-at-first"),
+        pytest.param(CodeVersion(SHA_A, False), CodeVersion(None, None), id="unknown-now"),
+        pytest.param(CodeVersion(None, None), CodeVersion(None, None), id="unknown-at-first"),
+    ],
+)
+def test_a_restart_at_another_or_an_unverifiable_code_version_is_refused_before_any_work(
+    stubbed, monkeypatch, first, now
+):
+    at_code(stubbed, monkeypatch, first)
+    start(stubbed)
+    stubbed.sessions.clear()
+    stubbed.calls.clear()
+    at_code(stubbed, monkeypatch, now)
+    message, lines = refused_start(stubbed, "a run is one code version; start a new run id")
+    assert f"({now.describe()})" in message and f"({first.describe()})" in message
+    assert stubbed.calls == [] and stubbed.sessions == []
+    assert len(lines) == 1
+    assert not (stubbed.run_dir / "errors.jsonl").exists()
+
+
+def test_a_restart_of_a_run_whose_first_start_predates_the_code_version_warns_and_goes_on(
+    stubbed, monkeypatch, capsys
+):
+    start(stubbed)
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_B, True))
+    capsys.readouterr()
+    lines = start(stubbed)
+    assert "code_commit" not in lines[0] and lines[1]["code_commit"] == SHA_B
+    (warning,) = capsys.readouterr().err.splitlines()
+    assert warning.startswith("warning: ") and "cannot be checked" in warning
+    assert CodeVersion(SHA_B, True).describe() in warning
 
 
 def test_a_nan_warmup_row_round_trips_through_a_session(env):
