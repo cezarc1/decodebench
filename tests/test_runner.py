@@ -1077,14 +1077,27 @@ def test_the_identity_check_runs_before_the_checkpoint_report_and_any_session(st
 
 
 def test_restart_with_fewer_rounds_than_an_earlier_start_is_refused(stubbed):
+    extended = replace(STUDY, extension_rounds=10)
     start(stubbed)
-    start(stubbed, with_rounds(10))
+    start(stubbed, replace(extended, rounds=10))
     stubbed.sessions.clear()
-    message, lines = refused_start(stubbed, "rounds", with_rounds(5))
+    message, lines = refused_start(stubbed, "rounds", replace(extended, rounds=5))
     assert "rounds 5 is lower than the 10 registered by an earlier start" in message
     assert message.endswith("an extended run resumes with its extension: pass --rounds 10")
     assert stubbed.sessions == []
     assert len(lines) == 2
+
+
+def test_a_run_started_with_an_unregistered_round_count_cannot_be_resumed(stubbed):
+    extended = replace(STUDY, extension_rounds=10)
+    start(stubbed, replace(extended, rounds=12))
+    stubbed.sessions.clear()
+    message, _ = refused_start(stubbed, "rounds", replace(extended, rounds=10))
+    assert message.endswith(
+        "rounds 10 is lower than the 12 registered by an earlier start of this run, which is "
+        "not a registered count of test: this run cannot be resumed; start a new run id"
+    )
+    assert stubbed.sessions == []
 
 
 def test_restart_with_fewer_rounds_than_the_first_start_is_refused(stubbed):
