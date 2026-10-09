@@ -66,11 +66,11 @@ library that runs the GEMM decides the result:
 
 | Large GEMMs on B200 | NVFP4 vs MXFP4 | Source |
 |---|---|---|
-| PyTorch 2.14, MAMF (best shape found) | ~9% more TFLOPS (6,624 vs 6,087; 73.6% vs 67.6% of peak) | [Stas Bekman](https://github.com/stas00/ml-engineering/blob/master/training/dtype.md#fp4-formats) |
-| PyTorch 2.13 `_scaled_mm`, M = 512 | 17% / 26% faster on gate_up / qkv; mixed on down | ours |
-| vLLM v0.31.0 (FlashInfer CuTe-DSL `mm_fp4`), M = 512 | 4–20% slower on gate_up and down; 2–3% faster on qkv | ours |
-| FlashInfer cuDNN, M = 512 | 10–30% faster on every shape | ours |
-| End-to-end decode, batch 256 / 512 | within 0.7% | ours |
+| PyTorch 2.14, MAMF (best shape found) | ~9% more TFLOPS (6,624 vs 6,087; 73.6% vs 67.6% of peak) | [ml-engineering](https://github.com/stas00/ml-engineering/blob/master/training/dtype.md#fp4-formats) |
+| PyTorch 2.13 `_scaled_mm`, M = 512 | 17% / 26% faster on gate_up / qkv; mixed on down | this |
+| vLLM v0.31.0 (FlashInfer CuTe-DSL `mm_fp4`), M = 512 | 4–20% slower on gate_up and down; 2–3% faster on qkv | this |
+| FlashInfer cuDNN, M = 512 | 10–30% faster on every shape | this |
+| End-to-end decode, batch 256 / 512 | within 0.7% | this |
 
 In PyTorch 2.13 the two formats run in different libraries (NVFP4 in cuBLASLt, MXFP4 in CUTLASS),
 so that row compares libraries as much as formats. Our rows are medians that held on two B200s
