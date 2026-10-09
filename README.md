@@ -163,14 +163,14 @@ because one round has no CI.
 
 ## Studies
 
-| Study | What | Treatments | Cells (batch × prompt tokens) | Rounds | Run | B200 time / budget |
+| Study | What | Treatments | Cells (batch × prompt tokens) | Rounds | Run | time (B200) |
 |---|---|---|---|---|---|---|
-| `smoke` | Smoke, NVFP4 kernel scan (chose cuDNN for NV-alt), NVIDIA-checkpoint cross-check | MX, NV, NVx, NVc, NVt, NVd, NVv | 1, 32, 128 × 1,024 | 1 | `smoke-r2-2` | 53 min / ~$10 |
-| `smoke-nf` | NV-nf runs CuTe-DSL with the fusion off | MX, NV, NVnf | 1, 32, 128 × 1,024 | 1 | `smoke-nf-2` | 31 min / ~$5 |
-| `full` | Main experiment (§3–§9), BF16 KV, M1 + M2 | MX, NV, NVa, MXp, NVnf | 1, 8, 32, 64, 128 × 1,024 | 5, up to 10 | `full-1` (10) | 12.6 h / ~$34 per 5 rounds |
-| `expb` | Experiment B (§13): above the compute ridge, FP8 KV | MX, NV, MXp | 128, 256, 512 × 1,024 | 5, up to 10 | `expb-1` | 4.5 h / ~$33 |
-| `smoke-c` | Experiment C smoke: long context, KV capacity | MX, NV | (1, 1k), (1, 32k), (1, 127k), (128, 360) | 1 | `smoke-c-1` | – / ~$5 |
-| `expc` | Experiment C (§16): batch size vs context length, M1 only | MX, NV, MXp | 1 × 1k…127k (6 cells); 8 × 15k, 32 × 3.4k, 128 × 360 | 5, up to 10 | `expc-1` | 4.7 h / ~$40 |
+| `smoke` | Smoke, NVFP4 kernel scan (chose cuDNN for NV-alt), NVIDIA-checkpoint cross-check | MX, NV, NVx, NVc, NVt, NVd, NVv | 1, 32, 128 × 1,024 | 1 | `smoke-r2-2` | 53 min |
+| `smoke-nf` | NV-nf runs CuTe-DSL with the fusion off | MX, NV, NVnf | 1, 32, 128 × 1,024 | 1 | `smoke-nf-2` | 31 min |
+| `full` | Main experiment (§3–§9), BF16 KV, M1 + M2 | MX, NV, NVa, MXp, NVnf | 1, 8, 32, 64, 128 × 1,024 | 5, up to 10 | `full-1` (10) | 12.6 h per 5 rounds |
+| `expb` | Experiment B (§13): above the compute ridge, FP8 KV | MX, NV, MXp | 128, 256, 512 × 1,024 | 5, up to 10 | `expb-1` | 4.5 h |
+| `smoke-c` | Experiment C smoke: long context, KV capacity | MX, NV | (1, 1k), (1, 32k), (1, 127k), (128, 360) | 1 | `smoke-c-1` | – |
+| `expc` | Experiment C (§16): batch size vs context length, M1 only | MX, NV, MXp | 1 × 1k…127k (6 cells); 8 × 15k, 32 × 3.4k, 128 × 360 | 5, up to 10 | `expc-1` | 4.7 h |
 
 Treatments: MX and NV are our MXFP4 and NVFP4 checkpoints on `flashinfer_cutedsl`. NVa (NV-alt)
 is NV on cuDNN; MXp (MX′) is a second MXFP4 server, the A/A control; NVnf is NV with the fusion
