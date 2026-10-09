@@ -527,12 +527,14 @@ def test_stop_escalates_to_sigkill_when_sigint_is_ignored(make_server, monkeypat
 
 
 class JumpingClock:
-    """A monotonic clock that `sleep` advances; the wall clock jumps an hour on every read."""
+    """A monotonic clock that `sleep` advances and every read moves on by `tick`, so a deadline
+    is always reached; the wall clock jumps an hour on every read."""
 
-    def __init__(self):
-        self.now, self.wall = 0.0, 0.0
+    def __init__(self, tick=0.001):
+        self.now, self.wall, self.tick = 0.0, 0.0, tick
 
     def monotonic(self):
+        self.now += self.tick
         return self.now
 
     def sleep(self, seconds):
@@ -574,7 +576,7 @@ def test_a_timed_out_memory_query_is_an_unreadable_reading_and_the_wait_goes_on(
     answers.extend([None, 4096, 100])
     srv.wait_gpu_released()
     assert len(timeouts) == 3
-    assert clock.now == NVIDIA_SMI_TIMEOUT_S + 2 * 2
+    assert clock.now == pytest.approx(NVIDIA_SMI_TIMEOUT_S + 2 * 2, abs=0.01)
 
 
 @pytest.mark.parametrize("timeout_s", [180, 61, 0.5])
@@ -593,15 +595,15 @@ def test_a_held_gpu_fails_the_wait_without_sleeping_past_its_deadline(smi):
     answers.extend([4096] * 10)
     with pytest.raises(RuntimeError, match="GPU memory was not released"):
         srv.wait_gpu_released(timeout_s=5)
-    assert clock.now == 5
+    assert clock.now == pytest.approx(5, abs=0.01)
 
 
 def test_the_health_deadline_is_monotonic_so_a_wall_clock_jump_does_not_end_it(
     make_server, monkeypatch
 ):
-    monkeypatch.setattr(srv, "time", JumpingClock())
+    monkeypatch.setattr(srv, "time", JumpingClock(tick=1.0))
     port = _closed_port()
-    server = make_server(_healthy_command(port), port=port, timeout_s=20)
+    server = make_server(_healthy_command(port), port=port, timeout_s=300)
     with server:
         assert server.proc.poll() is None
 
