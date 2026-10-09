@@ -250,9 +250,9 @@ def test_a_named_study_is_the_study_with_the_rounds_its_protocol_registered(name
 
 def test_a_run_takes_its_studys_pre_registered_rounds_or_its_extension():
     assert (FULL.rounds, FULL.extension_rounds) == (5, 10)
-    assert study_to_run("full") == study_to_run("full", 0) == study_to_run("full", 5) == FULL
+    assert study_to_run("full") is study_to_run("full", 0) is study_to_run("full", 5) is FULL
     assert study_to_run("full", 10) == replace(FULL, rounds=10)
-    assert study_to_run("smoke", 1) == study_to_run("smoke", 0) == SMOKE
+    assert study_to_run("smoke", 1) is study_to_run("smoke", 0) is SMOKE
 
 
 @pytest.mark.parametrize("rounds", [7, 50, 4, 1, 11, -1])

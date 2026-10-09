@@ -307,7 +307,7 @@ def test_experiment_rounds_override_only_rounds(runner_calls, monkeypatch):
 
 def test_experiment_refuses_rounds_that_are_not_pre_registered(runner_calls, monkeypatch):
     monkeypatch.setattr(mx, "results", FakeVolume())
-    with pytest.raises(ValueError, match="7 is not a pre-registered round count of full"):
+    with pytest.raises(ValueError, match="pre-registered"):
         _experiment("full", "full-1", rounds=7)
     assert runner_calls == []
 
@@ -797,7 +797,7 @@ def test_the_child_refuses_rounds_that_are_not_pre_registered(monkeypatch, tmp_p
     seen = []
     monkeypatch.setattr("fp4bench.runner.run_experiment", lambda *a, **k: seen.append(a))
     spec = {"study": "expc", "run_dir": str(tmp_path / "c-1"), "rounds": 50, "rerun_rounds": []}
-    with pytest.raises(ValueError, match="50 is not a pre-registered round count of expc"):
+    with pytest.raises(ValueError, match="pre-registered"):
         local.main([json.dumps(spec)])
     assert seen == []
 

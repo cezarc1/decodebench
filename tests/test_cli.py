@@ -160,17 +160,16 @@ def test_run_checks_rerun_rounds_against_the_rounds_it_will_run(fake):
 @pytest.mark.parametrize("name", list(STUDIES))
 def test_a_run_takes_only_the_studys_pre_registered_rounds_or_its_extension(fake, name):
     study = STUDIES[name]
-    registered = {0, study.rounds}
-    if study.extension_rounds is not None:
-        registered.add(study.extension_rounds)
+    registered = {r for r in (0, study.rounds, study.extension_rounds) if r is not None}
+    rule = (
+        "has no extension" if study.extension_rounds is None else f"(to {study.extension_rounds})"
+    )
     for rounds in sorted(registered):
         result = invoke("run", name, "--run-id", "x-1", "--rounds", str(rounds))
         assert result.exit_code == 0, result.output
     for rounds in sorted({study.rounds - 1, study.rounds + 1, 7, 12} - registered):
         result = invoke("run", name, "--run-id", "x-1", "--rounds", str(rounds))
-        refused(result, "--rounds", f"{rounds} is not a pre-registered round count of {name}")
-        if study.extension_rounds is not None:
-            refused(result, f"(to {study.extension_rounds})")
+        refused(result, "--rounds", f"{rounds} is not a pre-registered round count of {name}", rule)
     assert [c[3] for c in fake.calls] == sorted(registered)
     assert {n for n, s in STUDIES.items() if s.extension_rounds} == {"full", "expb", "expc"}
 

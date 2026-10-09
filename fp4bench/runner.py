@@ -323,7 +323,8 @@ PROTOCOL_FIELDS_ADDED_FOR_EXPC = ("cells", "max_model_len", "hf_overrides")
 
 
 def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
-    """On a restart, every protocol field but `rounds` must match, and `rounds` may only rise."""
+    """On a restart, every protocol field but `rounds` must match, and `rounds` never falls
+    below an earlier start's: an extended run stays extended."""
     lines = load_rows(run_dir / "manifests.jsonl", ManifestLine)
     if not lines:
         return
@@ -352,7 +353,8 @@ def check_protocol_unchanged(run_dir: Path, study: Study) -> None:
     if earlier and study.rounds < max(earlier):
         errors.append(
             f"rounds {study.rounds} is lower than the {max(earlier)} registered by an "
-            f"earlier start of this run; pass --rounds {max(earlier)} (or more)"
+            f"earlier start of this run; an extended run resumes with its extension: "
+            f"pass --rounds {max(earlier)}"
         )
     if errors:
         raise RuntimeError("; ".join(errors))

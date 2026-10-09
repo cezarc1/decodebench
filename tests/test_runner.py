@@ -1082,6 +1082,7 @@ def test_restart_with_fewer_rounds_than_an_earlier_start_is_refused(stubbed):
     stubbed.sessions.clear()
     message, lines = refused_start(stubbed, "rounds", with_rounds(5))
     assert "rounds 5 is lower than the 10 registered by an earlier start" in message
+    assert message.endswith("an extended run resumes with its extension: pass --rounds 10")
     assert stubbed.sessions == []
     assert len(lines) == 2
 

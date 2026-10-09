@@ -32,8 +32,10 @@ def study_to_run(name: str, rounds: int = 0) -> Study:
     any other value must be that count or its registered extension's (EXPERIMENT.md §8, §13, §16).
     """
     study = STUDIES[name]
+    if rounds in (0, study.rounds):
+        return study
     extension = study.extension_rounds
-    if rounds not in (0, study.rounds, extension):
+    if rounds != extension:
         rule = (
             " and has no extension"
             if extension is None
@@ -42,7 +44,7 @@ def study_to_run(name: str, rounds: int = 0) -> Study:
         raise ValueError(
             f"{rounds} is not a pre-registered round count of {name}: it runs {study.rounds}{rule}"
         )
-    return replace(study, rounds=rounds) if rounds > 0 else study
+    return replace(study, rounds=rounds)
 
 
 def recorded_protocol(manifest: ManifestLine | None) -> dict[str, Any]:
