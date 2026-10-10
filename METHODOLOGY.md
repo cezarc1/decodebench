@@ -1285,7 +1285,7 @@ A run resumes in its run directory. These rules keep one run from mixing inputs,
 protocols ([§11][e11], 2026-10-04).
 
 - **Start-up order.**
-  1. Check the protocol identity.
+  1. Check the protocol identity, then the code identity.
   2. Collect the environment manifest and verify it ([#stack](#stack)).
   3. Collect the input identities and the NVa pin check.
   4. Check the inputs against the first start (only if no input probe failed, since an
@@ -1309,6 +1309,11 @@ protocols ([§11][e11], 2026-10-04).
   registered count from the last manifest line and a lower one is a restart that forgot `--rounds`.
   A first start from before Experiment C's fields existed counts as having their defaults (no
   cells, a 4,096-token window, no override), because its argv was byte for byte the same.
+- **Code identity.** On a restart, the code must be the `code_commit` of the first start that
+  passed its environment check (the input identity's baseline below), and neither start may have
+  had uncommitted or unknown changes, because those cannot be compared: a run is one code version.
+  A baseline start from before `code_commit` existed cannot be checked, so the restart goes on
+  with a warning.
 - **Input identity.** These must equal those of the first start that passed its environment
   check, because a start that aborted ran no session:
   - the prompt hashes (M1, NLL and, for cell studies, `c_prompts.json`);
@@ -1428,7 +1433,10 @@ The definitions are in [§9][e9], as §13 and §16 amend them. Implementation fa
   fails.
 - **G1.** Every session's `linear_kernels` equals `[expected]`, its fusion facts match
   ([#fusion](#fusion)), no NVnf session loaded NV's graph ([#compile-cache](#compile-cache)), and
-  the last manifest line's `problems` is exactly `[]`.
+  the last manifest line's `problems` is exactly `[]`. The expected class and fusion are those of
+  the server args that line records for the treatment (`inputs.treatment_server_args`), or the
+  `TREATMENTS` table's where it records none. The kernel scan expects the same classes, and
+  its summary shows those args.
 - **G2.** The checkpoint report's NV/MX bytes are within 2% of the format ratio. A missing or
   malformed report fails.
 - **G3.** See [#aa](#aa).

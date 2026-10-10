@@ -121,8 +121,7 @@ def _spawned(call_id: str | None, run_id: str) -> None:
 
 
 def _describe(code: CodeVersion) -> str:
-    dirty = {True: " with uncommitted changes", False: "", None: " (unknown changes)"}
-    return f"code: {code.commit or 'unknown commit'}{dirty[code.dirty]}"
+    return f"code: {code.describe()}"
 
 
 @click.group()

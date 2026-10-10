@@ -3,7 +3,6 @@ change or drop a field), their typed forms, and run directories on disk."""
 
 import json
 import statistics
-from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +12,7 @@ from fp4bench import settings
 from fp4bench.analysis import cells as cl
 from fp4bench.analysis import design, plots
 from fp4bench.analysis.compare import RatioResult
+from fp4bench.analysis.inputs import served
 from fp4bench.core.schema import M1Row, M2Row, ManifestLine, ServerRow, _numbered_rows
 from fp4bench.core.types import Treatment, ValueKey, Verdict
 from fp4bench.studies import expc, model
@@ -58,6 +58,7 @@ CLEAN_CKPT = {
 }
 GOOD_REFERENCE = {"per_prompt": BF16_PP, "mean": statistics.fmean(BF16_PP)}
 FOUR = ("MX", "NV", "NVa", "MXp")
+TABLE_SERVED = served(None, Path("table"))
 FIVE = ("MX", "NV", "NVa", "MXp", "NVnf")
 SMOKE_CS = (1, 32, 128)
 EXPB_CS = (128, 256, 512)
@@ -90,10 +91,11 @@ def figures() -> None:
     """analyze_run draws its figures in this test."""
 
 
-def expect_kernel(monkeypatch, treatment: Treatment, kernel: str) -> None:
-    """G1 and the kernel scan expect `kernel` of `treatment`."""
-    spec = replace(model.TREATMENTS[treatment], linear_kernel=kernel)
-    monkeypatch.setattr(model, "TREATMENTS", {**model.TREATMENTS, treatment: spec})
+def recording_args(line: dict, treatment: Treatment, args: tuple[str, ...]) -> dict:
+    """`line` with `treatment` served with `args` (inputs.treatment_server_args), which G1 and
+    the kernel scan expect the kernel and fusion of."""
+    recorded = {**line["inputs"].get("treatment_server_args", {}), treatment: list(args)}
+    return {**line, "inputs": {**line["inputs"], "treatment_server_args": recorded}}
 
 
 def pp(treatment: str, degradation: float | None = None) -> list[float]:
@@ -454,7 +456,8 @@ C_CKPT = {
 C_REFERENCE = {"per_prompt": [1.8] * 4, "mean": 1.8}
 H_BATCH = {cell: expc.MAIN_RUN_DELTA_MS[cell[0]] for cell in expc.REGISTERED_CELLS}
 H_TOKENS = {
-    cell: design.h_tokens_delta_ms(design.kv_tokens(cell)) for cell in expc.REGISTERED_CELLS
+    cell: design.h_tokens_delta_ms(design.kv_tokens(cell, expc.MEAN_CONTEXT_EXTRA))
+    for cell in expc.REGISTERED_CELLS
 }
 
 

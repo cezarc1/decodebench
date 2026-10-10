@@ -2,7 +2,7 @@
 
 import json
 import statistics
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,6 +23,7 @@ from fp4bench.analysis.inputs import (
     protocol_cells,
 )
 from fp4bench.bytes_model import r_ideal, step_bytes
+from fp4bench.core.argv import flag_value
 from fp4bench.core.schema import ManifestLine, ServerRow, load_rows
 from fp4bench.core.types import (
     Cell,
@@ -241,21 +242,25 @@ def _parse_overrides(value: object) -> dict | None:
     return None
 
 
-def flag_value(argv: Sequence[str], flag: str) -> str | None:
-    """The value of the last `flag` ("--flag value" or "--flag=value"), None if absent."""
-    value = None
-    for i, arg in enumerate(argv):
-        if arg == flag and i + 1 < len(argv):
-            value = argv[i + 1]
-        elif arg.startswith(flag + "="):
-            value = arg[len(flag) + 1 :]
-    return value
-
-
 @dataclass(frozen=True)
 class ArgvCheck:
     sessions_checked: int
     problems: list[str]
+
+
+def _served_flag_problem(
+    argv: Sequence[str], flag: str, want: str, matches: Callable[[str, str], bool]
+) -> str | None:
+    """Why the served `flag` is not `want` (`matches(served, want)`), None if it is."""
+    try:
+        served = flag_value(argv, flag)
+    except ValueError as exc:
+        return str(exc)
+    return (
+        None
+        if served is not None and matches(served, want)
+        else f"served {flag} {served!r}, not {want}"
+    )
 
 
 def server_argv_check(sessions: Sequence[ServerRow]) -> ArgvCheck:
@@ -267,14 +272,16 @@ def server_argv_check(sessions: Sequence[ServerRow]) -> ArgvCheck:
         if not (isinstance(argv, list) and argv and all(isinstance(a, str) for a in argv)):
             problems.append(f"{who}: no server_argv")
             continue
-        window = flag_value(argv, "--max-model-len")
-        if window != str(SERVER.max_model_len):
-            problems.append(f"{who}: served --max-model-len {window!r}, not {SERVER.max_model_len}")
-        override = flag_value(argv, "--hf-overrides")
-        if _parse_overrides(override) != HF_OVERRIDES:
-            problems.append(
-                f"{who}: served --hf-overrides {override!r}, not {json.dumps(HF_OVERRIDES)}"
-            )
+        flags = (
+            _served_flag_problem(argv, "--max-model-len", str(SERVER.max_model_len), str.__eq__),
+            _served_flag_problem(
+                argv,
+                "--hf-overrides",
+                json.dumps(HF_OVERRIDES),
+                lambda served, _: _parse_overrides(served) == HF_OVERRIDES,
+            ),
+        )
+        problems += [f"{who}: {problem}" for problem in flags if problem is not None]
         rope = [
             m for m in ROPE_SCALING_MARKERS if any(m in a.lower().replace("-", "_") for a in argv)
         ]

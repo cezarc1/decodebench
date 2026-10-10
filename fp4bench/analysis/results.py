@@ -99,6 +99,7 @@ class BatchRunResult(RunResult):
     paired_at_primary: dict[int, int]
     tput: Values[int]
     per_user: Values[int]
+    served_args: dict[Treatment, tuple[str, ...]]
 
     @override
     def payload(self) -> dict[str, Any]:

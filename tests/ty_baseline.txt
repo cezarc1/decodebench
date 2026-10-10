@@ -1,8 +1,6 @@
 # ty diagnostics allowed, as `file rule count message`; the counts only fall. Written by
 # `uv run python -m tests.ty_baseline --update`.
-# 121 diagnostics
-fp4bench/analysis/gates.py unresolved-attribute 1 Object of type `Iterable[int]` has no attribute `batch`
-fp4bench/analysis/gates.py unresolved-attribute 1 Object of type `Iterable[int]` has no attribute `prompt_len`
+# 119 diagnostics
 fp4bench/profiling.py invalid-assignment 2 Invalid subscript assignment with key of type `Literal["elapsed_s"]` and value of type `float` on object of type `dict[str, str | list[dict[str, Any]]]`
 fp4bench/profiling.py invalid-assignment 1 Invalid subscript assignment with key of type `Literal["staging_s"]` and value of type `float` on object of type `dict[str, str | list[dict[str, Any]]]`
 fp4bench/publish.py redundant-condition 1 `None` is always falsy

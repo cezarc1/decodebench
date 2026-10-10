@@ -261,7 +261,7 @@ def _token_panel(
     grid = np.geomspace(ps[0], ps[-1], 80)
     ax.plot(
         grid,
-        [h_tokens_delta_ms(kv_tokens(Cell(1, int(p)))) for p in grid],
+        [h_tokens_delta_ms(kv_tokens(Cell(1, int(p)), MEAN_CONTEXT_EXTRA)) for p in grid],
         ":",
         color=H_TOKENS_COLOR,
         lw=2,
@@ -324,7 +324,7 @@ def _batch_panel(
         lw=1.8,
         label="H_batch (pre-registered): the main run's Δ at batch C",
     )
-    level = h_tokens_delta_ms(kv_tokens(BATCH_ARM[0]))
+    level = h_tokens_delta_ms(kv_tokens(BATCH_ARM[0], MEAN_CONTEXT_EXTRA))
     ax.plot(
         cs,
         [level] * len(cs),

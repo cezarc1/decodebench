@@ -89,6 +89,22 @@ class CodeVersion(NamedTuple):
     commit: str | None = None
     dirty: bool | None = None
 
+    @property
+    def is_clean(self) -> bool:
+        """A known commit with no uncommitted changes."""
+        return self.commit is not None and self.dirty is False
+
+    def describe(self) -> str:
+        """e.g. '<sha> with uncommitted changes'."""
+        match self.dirty:
+            case True:
+                changes = " with uncommitted changes"
+            case False:
+                changes = ""
+            case None:
+                changes = " (unknown changes)"
+        return f"{self.commit or 'unknown commit'}{changes}"
+
     def env(self) -> dict[str, str]:
         out = {}
         if self.commit is not None:

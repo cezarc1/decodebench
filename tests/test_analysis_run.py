@@ -18,12 +18,14 @@ from fp4bench.core.types import (
     Format,
     Gate,
     KvDtype,
+    LinearBackend,
     RatioName,
     Treatment,
     UnknownKvDtype,
     Verdict,
 )
 from fp4bench.studies import kernel_scan as scan_rule
+from fp4bench.studies import model
 from fp4bench.studies.main import FULL
 from fp4bench.studies.smoke import SMOKE
 from tests import RUNS_DIR
@@ -46,6 +48,7 @@ from tests.analysis_runs import (  # noqa: F401 - the fixtures _no_figures and f
     main_and_expb,
     manifest,
     pp,
+    recording_args,
     set_fields,
     set_nll,
     smoke,
@@ -223,6 +226,39 @@ def test_a_main_run_reads_its_context_from_the_rows_prompt_length(tmp_path, prom
     assert f"KV cache of C sequences at context {context})" in md
     r_table = _section(md, "### M1: R = t_NV / t_MX (decides H_eq)")
     assert r_table.split("\n| 8 |")[1].split("\n")[0].endswith(f" {bm.r_ideal(8, context):.4f} |")
+
+
+def test_a_main_run_reads_its_context_from_the_rows_decode_lengths(tmp_path):
+    servers, m1, m2 = synthetic(1.0, (8, 32, 128))
+    for row in m1:
+        row["n1"], row["n2"] = 256, 2304
+    run, out = _run(tmp_path, (servers, m1, m2))
+    assert out.context == settings.M1_INPUT_LEN + (256 + 2304) // 2 == 2304
+    assert "R_ideal: the bytes model's upper bound (§5) at context 2304 " in _md(run)
+    kv = out.gates[Gate.G6A]["kv_capacity"]
+    assert kv["required_tokens"] == 128 * (settings.M1_INPUT_LEN + 2304)
+
+
+def test_a_main_run_whose_rows_disagree_on_the_decode_lengths_is_refused(tmp_path):
+    servers, m1, m2 = synthetic(1.0, (8, 32, 128))
+    m1[3]["n2"] = 2304
+    run = write_run(tmp_path, servers, m1, m2, manifest())
+    with pytest.raises(ValueError, match=r"several M1 decode lengths") as exc:
+        evaluate(run)
+    assert str(run) in str(exc.value) and "(128, 1152)" in str(exc.value)
+
+
+@pytest.mark.parametrize("field", ["n1", "n2"])
+@pytest.mark.parametrize("value", [None, "1152", True, 1152.0])
+def test_a_main_run_whose_rows_record_a_decode_length_that_is_no_positive_int_is_refused(
+    tmp_path, field, value
+):
+    servers, m1, m2 = synthetic(1.0, (8, 32, 128))
+    m1[3][field] = value
+    run = write_run(tmp_path, servers, m1, m2, manifest())
+    with pytest.raises(ValueError, match="not a positive integer") as exc:
+        evaluate(run)
+    assert str(run) in str(exc.value) and f"{field} {value!r}" in str(exc.value)
 
 
 def test_the_committed_main_runs_are_at_context_1664():
@@ -705,6 +741,35 @@ def test_the_smoke_reports_the_scan_the_selection_and_the_crosscheck(tmp_path):
     assert g1["pass"] is True and set(g1["expected"]) == set(SMOKE.treatments)
     assert out.gates[Gate.G5B]["pass"] and out.gates[Gate.G6A]["pass"]
     assert set(out.bandwidth) == {"MX", "NV"}
+
+
+def test_g1_and_the_scan_expect_the_kernel_of_the_recorded_server_args(tmp_path):
+    servers, m1, m2 = smoke()
+    set_fields(servers, "NVc", linear_kernels=["CutlassNvFp4LinearKernel"])
+    line = recording_args(
+        smoke_manifest(require_published=False),
+        Treatment.NVC,
+        model.pinned_to(LinearBackend.CUTLASS),
+    )
+    run, out = _run(tmp_path, (servers, m1, m2), line)
+    assert out.gates[Gate.G1]["expected"]["NVc"] == "CutlassNvFp4LinearKernel"
+    assert out.gates[Gate.G1]["pass"] is True
+    assert out.scan is not None and out.scan.kernel_matches[Treatment.NVC] is True
+    assert "| NVc | cutlass | CutlassNvFp4LinearKernel | CutlassNvFp4LinearKernel |" in _md(run)
+
+
+def test_the_selected_kernels_args_are_those_the_run_recorded(tmp_path):
+    line = recording_args(
+        smoke_manifest(require_published=False),
+        Treatment.NVT,
+        ("--linear-backend=flashinfer_trtllm",),
+    )
+    run, out = _run(tmp_path, smoke(), line)
+    assert out.scan is not None and out.scan.selected == "NVt"
+    assert out.scan.selected_server_args == ("--linear-backend=flashinfer_trtllm",)
+    md = _md(run)
+    assert '`("--linear-backend=flashinfer_trtllm")` its `server_args`' in md
+    assert "| NVt | flashinfer_trtllm | FlashInferTrtllmNvFp4LinearKernel |" in md
 
 
 def test_the_summary_prints_the_margin_and_the_eligibility_table(tmp_path):

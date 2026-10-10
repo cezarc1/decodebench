@@ -9,3 +9,5 @@ results/
 dist/
 build/
 docs/superpowers/
+.claude/
+/local/

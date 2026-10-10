@@ -1,5 +1,6 @@
 import contextlib
 import http.server
+import os
 import threading
 from collections.abc import Generator
 from pathlib import Path
@@ -9,6 +10,12 @@ REPO = Path(__file__).resolve().parents[1]
 RUNS_DIR = REPO / "data" / "runs"
 RUN_DIRS = sorted(p for p in RUNS_DIR.iterdir() if p.is_dir())
 GOLDEN_DIR = REPO / "tests" / "golden"
+
+
+def env_without_git() -> dict[str, str]:
+    """The environment for a git subprocess: without GIT_* variables, which a `git rebase
+    --exec`, a hook or a CI step may set, git finds its repository from its own directory."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
 
 
 class QuietHandler(http.server.BaseHTTPRequestHandler):

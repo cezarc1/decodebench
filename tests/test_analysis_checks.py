@@ -9,6 +9,7 @@ from fp4bench.analysis import cells as cl
 from fp4bench.analysis import checks as ck
 from fp4bench.analysis import design, stats
 from fp4bench.analysis.inputs import kv_cache_dtype
+from fp4bench.core.argv import flag_value
 from fp4bench.core.types import (
     Cell,
     Format,
@@ -279,7 +280,7 @@ def test_the_registered_cells_follow_section_16():
         (32, 3360),
         (128, 360),
     )
-    assert {design.kv_tokens(cell) for cell in expc.BATCH_ARM} == {128_000}
+    assert {design.kv_tokens(cell, expc.MEAN_CONTEXT_EXTRA) for cell in expc.BATCH_ARM} == {128_000}
     assert max(min_kv_tokens_for(*cell) for cell in expc.REGISTERED_CELLS) == 193_536
     assert design.arms_of(Cell(1, 127360)) == ["token", "batch"]
     assert expc.EXPC.cells == expc.REGISTERED_CELLS
@@ -368,13 +369,26 @@ def test_the_served_argv_check_flags_deviations(change, problem):
 
 
 def test_the_served_argv_flag_forms():
-    assert ck.flag_value(["--max-model-len=131072"], "--max-model-len") == "131072"
+    assert flag_value(["--max-model-len=131072"], "--max-model-len") == "131072"
     assert (
-        ck.flag_value(["--max-model-len", "4096", "--max-model-len", "131072"], "--max-model-len")
+        flag_value(["--max-model-len", "4096", "--max-model-len", "131072"], "--max-model-len")
         == "131072"
     )
-    assert ck.flag_value(["--max-model-len"], "--max-model-len") is None
+    assert flag_value(["--max-model-len-x", "4096"], "--max-model-len") is None
+    with pytest.raises(ValueError, match="--max-model-len"):
+        flag_value(["--max-model-len"], "--max-model-len")
     assert "--max-model-len" in c_argv("MX")
+
+
+def test_a_served_flag_without_a_value_is_a_problem_and_the_other_flags_are_still_checked():
+    rows = [c_session(1, "NV")]
+    argv = rows[0]["server_argv"]
+    argv[argv.index("--hf-overrides") + 1] = '{"max_position_embeddings": 65536}'
+    argv.extend(["--rope-parameters", "{}", "--max-model-len"])
+    window, override, rope = ck.server_argv_check(cl.sessions_of(typed_servers(rows))).problems
+    assert window.startswith("round 1 NV: --max-model-len has no value")
+    assert override.startswith("round 1 NV: served --hf-overrides")
+    assert rope == "round 1 NV: the served argv mentions rope_parameters"
 
 
 def test_the_nll_crosscheck_compares_with_the_main_run_and_its_windows():

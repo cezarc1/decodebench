@@ -5,14 +5,16 @@ from typing import Any
 import pytest
 
 from fp4bench import settings
+from fp4bench.analysis import cells as cl
 from fp4bench.analysis import gates as gt
 from fp4bench.analysis.cells import m1_steps, session_ids
 from fp4bench.analysis.compare import ContrastResult, contrast
-from fp4bench.analysis.inputs import resolve_checkpoint
-from fp4bench.core.types import Cell, Gate, RatioName, Treatment, Verdict
+from fp4bench.analysis.inputs import resolve_checkpoint, served
+from fp4bench.core.types import Cell, Gate, LinearBackend, RatioName, Treatment, Verdict
 from fp4bench.studies import model
 from fp4bench.studies.expb import EXPB
 from fp4bench.studies.expc import AA_EFFECT_MARGIN_MS, EXPC, REGISTERED_CELLS
+from fp4bench.studies.model import pinned_to
 from fp4bench.studies.smoke import SMOKE
 from tests.analysis_runs import (
     ACT_QUANT_LINE,
@@ -26,17 +28,19 @@ from tests.analysis_runs import (
     GOOD_REFERENCE,
     H_BATCH,
     SMOKE_CS,
+    TABLE_SERVED,
     TEL,
     aa_results,
     c_build,
     c_manifest,
     drop_m1,
     expb_manifest,
-    expect_kernel,
     fail,
+    fusion_facts,
     graph_hash,
     kernel_line,
     manifest,
+    recording_args,
     set_fields,
     set_nll,
     smoke,
@@ -47,6 +51,8 @@ from tests.analysis_runs import (
     typed_servers,
 )
 
+RUN = Path("runs/run-1")
+PIN = ("--linear-backend", "flashinfer_cutedsl")
 GATE_NAMES = (
     "G1_kernels",
     "G2_bytes",
@@ -74,7 +80,9 @@ def _gates(
     spec=None,
 ):
     line = typed_manifest(manifest() if manifest_line == "ok" else manifest_line)
-    spec = spec or gt.batch_gate_spec(batches, line)
+    spec = spec or gt.batch_gate_spec(
+        batches, line, served(line, RUN), prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
+    )
     return gt.gate_report(
         typed_servers(servers),
         typed_m1(m1),
@@ -99,11 +107,15 @@ def test_a_clean_synthetic_run_passes_every_gate():
 
 
 def test_no_sessions_means_no_gate_passes():
-    for spec in (gt.batch_gate_spec((), None), gt.GateSpec(cells=(), m2=False, by_cell=True)):
+    by_cell = gt.GateSpec(cells=(), m2=False, by_cell=True, n2=settings.M1_N2, served=TABLE_SERVED)
+    by_batch = gt.batch_gate_spec(
+        (), None, TABLE_SERVED, prompt_len=settings.M1_INPUT_LEN, n2=settings.M1_N2
+    )
+    for spec in (by_batch, by_cell):
         gates = gt.gate_report([], [], [], None, None, None, spec, gt.AaRatios({}, ()))
         assert tuple(gates) == spec.names
         assert all(g == {"pass": False, "reason": "no sessions"} for g in gates.values())
-    assert Gate.G6B not in gt.GateSpec(cells=(), m2=False, by_cell=True).names
+    assert Gate.G6B not in by_cell.names
 
 
 def test_the_gate_report_flags_a_gpu_change_a_capture_size_and_an_invalid_m2_cell():
@@ -169,29 +181,75 @@ def test_g1_fails_the_aa_replica_on_another_kernel_than_mx():
     assert g1["pass"] is False and {m[1] for m in g1["mismatched_sessions"]} == {"MXp"}
 
 
-def test_g1_follows_nvas_configured_kernel(monkeypatch):
+def test_g1_follows_nvas_recorded_kernel():
     servers, m1, m2 = synthetic(1.0)
-    expect_kernel(monkeypatch, Treatment.NVA, "FlashInferCutlassNvFp4LinearKernel")
-    g1 = _gates(servers, m1, m2)[Gate.G1]
+    line = recording_args(manifest(), Treatment.NVA, pinned_to(LinearBackend.FLASHINFER_CUTLASS))
+    g1 = _gates(servers, m1, m2, manifest_line=line)[Gate.G1]
+    assert g1["expected"]["NVa"] == "FlashInferCutlassNvFp4LinearKernel"
     assert g1["pass"] is False and {m[1] for m in g1["mismatched_sessions"]} == {"NVa"}
     set_fields(servers, "NVa", linear_kernels=["FlashInferCutlassNvFp4LinearKernel"])
-    assert _gates(servers, m1, m2)[Gate.G1]["pass"] is True
+    assert _gates(servers, m1, m2, manifest_line=line)[Gate.G1]["pass"] is True
+
+
+def test_g1_follows_the_recorded_fusion():
+    servers, m1, m2 = _five()
+    line = recording_args(
+        manifest(treatments=FIVE), Treatment.NV, model.TREATMENTS[Treatment.NVNF].server_args
+    )
+    g1 = _gates(servers, m1, m2, manifest_line=line)[Gate.G1]
+    assert g1["expected_act_quant_fusion"]["NV"] is False
+    assert g1["pass"] is False and {m[1] for m in g1["fusion_mismatched_sessions"]} == {"NV"}
+    set_fields(servers, "NV", **fusion_facts("NVnf"))
+    assert _gates(servers, m1, m2, manifest_line=line)[Gate.G1]["pass"] is True
+
+
+def test_g1_expects_the_table_of_a_manifest_without_recorded_args():
+    servers, m1, m2 = _five()
+    g1 = _gates(servers, m1, m2, manifest_line=manifest(treatments=FIVE))[Gate.G1]
+    assert g1["pass"] is True
+    assert g1["expected"] == {t: model.TREATMENTS[Treatment(t)].linear_kernel for t in FIVE}
+    assert g1["expected_act_quant_fusion"] == {
+        t: model.TREATMENTS[Treatment(t)].act_quant_fusion for t in FIVE
+    }
+
+
+@pytest.mark.parametrize(
+    "recorded", [None, ["--linear-backend"], {"NVa": "--linear-backend"}, {"XX": []}, {"NV": [1]}]
+)
+def test_a_malformed_record_of_the_server_args_is_refused_naming_the_run(recorded):
+    line = manifest()
+    line["inputs"]["treatment_server_args"] = recorded
+    with pytest.raises(ValueError, match="not a list of strings per treatment") as exc:
+        served(typed_manifest(line), RUN)
+    assert str(exc.value).startswith(f"{RUN}: inputs.treatment_server_args of the last manifest")
+
+
+@pytest.mark.parametrize(
+    "treatment, args, why",
+    [
+        ("NVa", ["--linear-backend"], "--linear-backend has no value"),
+        ("NVa", ["--linear-backend", "marlin"], "'marlin' is not a valid LinearBackend"),
+        ("NV", [*PIN, "--compilation-config", '{"pass_config": '], "Expecting value"),
+    ],
+)
+def test_recorded_args_that_select_no_kernel_or_fusion_are_refused_naming_where(
+    treatment, args, why
+):
+    line = recording_args(manifest(), Treatment(treatment), tuple(args))
+    with pytest.raises(ValueError, match=why) as exc:
+        served(typed_manifest(line), RUN)
+    where = f"{RUN}: inputs.treatment_server_args of the last manifest line, {treatment} {args!r}: "
+    assert str(exc.value).startswith(where)
 
 
 def test_g1_fails_a_treatment_with_no_expected_kernel_or_fusion():
-    servers, m1, m2 = synthetic(1.0)
-    spec = gt.GateSpec(
-        cells=(Cell(8, 1024), Cell(32, 1024)),
-        m2=True,
-        by_cell=False,
-        expected_kernel={
-            t: s.linear_kernel for t, s in model.TREATMENTS.items() if t != Treatment.NVA
-        },
-        expected_fusion={
-            t: s.act_quant_fusion for t, s in model.TREATMENTS.items() if t != Treatment.NVA
-        },
+    servers, _, _ = synthetic(1.0)
+    g1 = gt.g1_kernels(
+        cl.sessions_of(typed_servers(servers)),
+        typed_manifest(manifest()),
+        {t: s.linear_kernel for t, s in model.TREATMENTS.items() if t != Treatment.NVA},
+        {t: s.act_quant_fusion for t, s in model.TREATMENTS.items() if t != Treatment.NVA},
     )
-    g1 = _gates(servers, m1, m2, spec=spec)[Gate.G1]
     assert g1["pass"] is False and g1["expected"]["NVa"] is None
     assert g1["expected_act_quant_fusion"]["NVa"] is None
     assert {m[1] for m in g1["mismatched_sessions"]} == {"NVa"}
@@ -575,10 +633,11 @@ def test_g6a_sizes_the_kv_pool_by_min_kv_tokens_for_of_every_expected_cell(monke
     monkeypatch.setattr(
         gt,
         "min_kv_tokens_for",
-        lambda c, p=settings.M1_INPUT_LEN: calls.append((c, p)) or 12_345 * c,
+        lambda c, p, n2: calls.append((c, p, n2)) or 12_345 * c,
     )
     kv = _gates(*synthetic(1.0))[Gate.G6A]["kv_capacity"]
-    assert sorted(calls) == [(8, 1024), (32, 1024)] and kv["required_tokens"] == 12_345 * 32
+    assert sorted(calls) == [(8, 1024, 1152), (32, 1024, 1152)]
+    assert kv["required_tokens"] == 12_345 * 32
 
 
 @pytest.mark.parametrize(
@@ -757,7 +816,9 @@ def _c_gates(mutate=None, manifest_line=None, **kw) -> dict:
         line,
         checkpoint,
         source,
-        gt.GateSpec(cells=cells, m2=False, by_cell=True),
+        gt.GateSpec(
+            cells=cells, m2=False, by_cell=True, n2=settings.M1_N2, served=served(line, RUN)
+        ),
         gt.AaEffects(effects, AA_EFFECT_MARGIN_MS, AA),
     )
 

@@ -3,7 +3,6 @@
 from dataclasses import replace
 from pathlib import Path
 
-from fp4bench import settings
 from fp4bench.analysis import plots, report, stats
 from fp4bench.analysis.cells import (
     Values,
@@ -14,7 +13,6 @@ from fp4bench.analysis.cells import (
     median_value,
     order_effect,
     paired_rounds,
-    row_cell,
     sessions_of,
     unusable,
 )
@@ -46,6 +44,7 @@ from fp4bench.analysis.gates import (
     nonblocking_failed_gates,
 )
 from fp4bench.analysis.inputs import (
+    M1Shape,
     RunData,
     kv_cache_dtype,
     load_run,
@@ -163,17 +162,8 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
     sessions = sessions_of(data.servers)
     sids = {s.session_id for s in sessions}
     failed = failed_sessions(data.servers)
-    cells = sorted(
-        {cell for row in data.m1 if row.session_id in sids and (cell := row_cell(row)) is not None}
-    )
-    prompt_lens = sorted({cell.prompt_len for cell in cells})
-    if len(prompt_lens) > 1:
-        raise ValueError(
-            f"{data.run_dir}: M1 cells of several prompt lengths {prompt_lens}, but "
-            f"the last manifest line has no protocol.cells (Experiment C)"
-        )
-    prompt_len = prompt_lens[0] if prompt_lens else settings.M1_INPUT_LEN
-    batches = tuple(cell.batch for cell in cells)
+    shape, prompt_len = data.m1_shape, data.batch_prompt_len
+    batches = tuple(cell.batch for cell in shape.cells)
     step = by_batch(m1_steps(data.m1, sids))
     tput = m2_values(data.m2, sids, "aggregate_tps")
     itl = m2_values(data.m2, sids, "itl_p50_ms")
@@ -204,7 +194,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         manifest,
         checkpoint,
         checkpoint_source,
-        batch_gate_spec(batches, manifest, prompt_len),
+        batch_gate_spec(batches, manifest, data.served, prompt_len=prompt_len, n2=shape.n2),
         AaRatios(m1[RatioName.AA], batches),
     )
     skipped = {
@@ -225,7 +215,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         else reference_nll_comparison(sessions, manifest, Path(reference_run)),
     )
     kv = kv_cache_dtype(manifest)
-    context = prompt_len + (settings.M1_N1 + settings.M1_N2) // 2
+    context = prompt_len + shape.mean_context_extra
     return BatchRunResult(
         run_dir=data.run_dir,
         study=study,
@@ -254,7 +244,12 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         scan=None
         if study.kernel_scan is None
         else kernel_scan(
-            step, sessions, batches, study.kernel_scan, g5b=gates[Gate.G5B], failed=failed
+            step,
+            data.servers,
+            batches,
+            study.kernel_scan,
+            served=data.served,
+            g5b=gates[Gate.G5B],
         ),
         crosscheck=None
         if study.crosscheck is None
@@ -264,6 +259,7 @@ def _evaluate_batches(data: RunData, study: Study, reference_run: Path | None) -
         paired_at_primary={c: len(paired_rounds(step, r.numer, r.denom, c)) for c in primary},
         tput=tput,
         per_user=per_user,
+        served_args=data.served.args,
     )
 
 
@@ -272,7 +268,7 @@ def ordered_cells(cells: set[Cell]) -> list[Cell]:
     return [c for c in REGISTERED_CELLS if c in cells] + sorted(cells - set(REGISTERED_CELLS))
 
 
-def cell_result(steps: Values[Cell], cell: Cell, study: Study) -> CellResult:
+def cell_result(steps: Values[Cell], cell: Cell, study: Study, shape: M1Shape) -> CellResult:
     """Δ = t_denom − t_numer of R (> 0: numerator faster), Δ_AA = t_numer − t_denom of AA."""
     r, aa_ratio = study.ratio(RatioName.R), study.ratio(RatioName.AA)
     medians = {t: median_value(steps, t, cell) for t in cell_treatments(study)}
@@ -281,7 +277,7 @@ def cell_result(steps: Values[Cell], cell: Cell, study: Study) -> CellResult:
         c=cell.batch,
         p=cell.prompt_len,
         arms=arms_of(cell),
-        kv_tokens_mean=kv_tokens(cell),
+        kv_tokens_mean=kv_tokens(cell, shape.mean_context_extra),
         t_ms={t: None if v is None else v * 1000 for t, v in medians.items()},
         r=ratio(steps, r.numer, r.denom, cell),
         delta_ms=delta_ms(steps, r.denom, r.numer, cell),
@@ -310,8 +306,9 @@ def _evaluate_cells(data: RunData, study: Study) -> CellRunResult:
     steps = m1_steps(data.m1, sids, by_cell=True)
     manifest_cells, _ = protocol_cells(manifest)
     expected = ordered_cells(set(manifest_cells or ()) | {cell for (_, _, cell) in steps})
+    shape = data.m1_shape
     cells = {
-        cell: cell_result(steps, cell, study)
+        cell: cell_result(steps, cell, study, shape)
         for cell in ordered_cells(set(REGISTERED_CELLS) | set(expected))
     }
     effects = {
@@ -327,7 +324,7 @@ def _evaluate_cells(data: RunData, study: Study) -> CellRunResult:
     token, batch = (study.contrast_along(arm).name for arm in (Arm.TOKEN, Arm.BATCH))
     answer = batch_vs_tokens_answer((token, effects[token]), (batch, effects[batch]), rounds)
     repro = cells.get(REPRO_CELL)
-    spec = GateSpec(cells=tuple(expected), m2=False, by_cell=True)
+    spec = GateSpec(cells=tuple(expected), m2=False, by_cell=True, n2=shape.n2, served=data.served)
     gates = gate_report(
         data.servers,
         data.m1,

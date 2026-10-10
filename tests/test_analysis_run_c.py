@@ -70,6 +70,40 @@ def test_h_batch_like_data_answers_batch(tmp_path):
     assert out.reproduction.status == "pass"
 
 
+def test_the_observed_kv_tokens_follow_the_rows_decode_lengths(tmp_path):
+    def longer(servers, m1):
+        for row in m1:
+            row["n1"], row["n2"] = 256, 2304
+
+    _, out = _analyze(tmp_path, mutate=longer, write=False)
+    assert _cell(out, 128, 360).kv_tokens_mean == 128 * (360 + (256 + 2304) // 2)
+    required = out.gates[Gate.G6A]["kv_capacity"]["required_tokens"]
+    assert required == max(c * (p + 2304) for c, p in expc.REGISTERED_CELLS)
+
+
+@pytest.mark.parametrize("value", [None, "1152", True, 1152.0])
+def test_a_cell_run_whose_rows_record_a_decode_length_that_is_no_positive_int_is_refused(
+    tmp_path, value
+):
+    def odd(servers, m1):
+        m1[3]["n2"] = value
+
+    run = c_run(tmp_path, mutate=odd)
+    with pytest.raises(ValueError, match="not a positive integer") as exc:
+        evaluate(run)
+    assert str(run) in str(exc.value) and f"n2 {value!r}" in str(exc.value)
+
+
+def test_a_cell_run_whose_rows_disagree_on_the_decode_lengths_is_refused(tmp_path):
+    def mixed(servers, m1):
+        m1[3]["n2"] = 2304
+
+    run = c_run(tmp_path, mutate=mixed)
+    with pytest.raises(ValueError, match="several M1 decode lengths") as exc:
+        evaluate(run)
+    assert str(run) in str(exc.value)
+
+
 def test_h_tokens_like_data_answers_tokens(tmp_path):
     _, out = _analyze(tmp_path, delta=H_TOKENS, write=False)
     assert out.effects["E_tok"].classification == Effect.SHRINKS

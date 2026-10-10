@@ -118,9 +118,11 @@ def cells_at(prompt_len: int, batches: tuple[int, ...]) -> tuple[Cell, ...]:
     return tuple(Cell(c, prompt_len) for c in batches)
 
 
-def min_kv_tokens_for(c: int, prompt_len: int = settings.M1_INPUT_LEN) -> int:
+def min_kv_tokens_for(
+    c: int, prompt_len: int = settings.M1_INPUT_LEN, n2: int = settings.M1_N2
+) -> int:
     """KV tokens an M1 block holds at the end of its N2 wave (METHODOLOGY.md#kv-capacity)."""
-    return c * (prompt_len + settings.M1_N2)
+    return c * (prompt_len + n2)
 
 
 @dataclass(frozen=True)

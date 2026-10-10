@@ -6,9 +6,16 @@ from enum import StrEnum
 from typing import Self, override
 
 from fp4bench.analysis import stats
-from fp4bench.analysis.cells import Values, mean_nll, median_value, paired_rounds
+from fp4bench.analysis.cells import (
+    Values,
+    failed_sessions,
+    mean_nll,
+    median_value,
+    paired_rounds,
+    sessions_of,
+)
 from fp4bench.analysis.compare import ContrastResult, RatioResult
-from fp4bench.analysis.inputs import primary_batches, registered_rounds
+from fp4bench.analysis.inputs import Served, primary_batches, registered_rounds
 from fp4bench.core.schema import ManifestLine, ServerRow
 from fp4bench.core.types import (
     Cell,
@@ -19,7 +26,6 @@ from fp4bench.core.types import (
     Verdict,
     is_finite,
 )
-from fp4bench.studies import model
 from fp4bench.studies.base import Ratio
 from fp4bench.studies.expc import MAIN_RUN_R_BATCH1, REPRO_CELL, REPRO_TOL
 from fp4bench.studies.kernel_scan import Crosscheck, KernelScanSpec
@@ -254,7 +260,7 @@ class KernelScan:
     selection_c: int
     median_step_s: dict[Treatment, dict[int, float]]
     ratio_to_nv: dict[Treatment, dict[int, float]]
-    expected_kernels: dict[Treatment, LinearKernel | None]
+    expected_kernels: dict[Treatment, LinearKernel]
     observed_kernels: dict[Treatment, list[str]]
     kernel_matches: dict[Treatment, bool | None]
     failed: list[Treatment]
@@ -282,16 +288,19 @@ def _rel_gap(a: float, b: float) -> float:
 
 def kernel_scan(
     step: Values[int],
-    sessions: Sequence[ServerRow],
+    servers: Sequence[ServerRow],
     batches: Sequence[int],
     spec: KernelScanSpec,
+    *,
+    served: Served,
     g5b: Mapping | None = None,
-    failed: Sequence[ServerRow] = (),
 ) -> KernelScan | None:
-    """The NVa rule (`spec`, METHODOLOGY.md#nv-alt); None for a run without a scan treatment."""
+    """The NVa rule (`spec`, METHODOLOGY.md#nv-alt); None for a run without a scan treatment.
+    Each treatment is expected to run the kernel it was `served` with."""
+    sessions = sessions_of(servers)
     scan = spec.treatments
     failed_by: dict[Treatment, ServerRow] = {}
-    for row in failed:
+    for row in failed_sessions(servers):
         failed_by.setdefault(row.treatment, row)
     if (
         not any(s.treatment in scan for s in sessions)
@@ -310,9 +319,7 @@ def kernel_scan(
     ratio = {
         t: {c: m / nv_median[c] for c, m in median[t].items() if c in nv_median} for t in treatments
     }
-    expected = {
-        t: served.linear_kernel if (served := model.TREATMENTS.get(t)) else None for t in treatments
-    }
+    expected = {t: served.kernels[t] for t in treatments}
     cute_dsl_kernel = LinearBackend.FLASHINFER_CUTEDSL.kernel
     observed = {
         t: sorted({k for s in sessions if s.treatment == t for k in s.linear_kernels or []})
@@ -321,11 +328,7 @@ def kernel_scan(
     matches: dict[Treatment, bool | None] = {}
     for t in treatments:
         mine = [s for s in sessions if s.treatment == t]
-        matches[t] = (
-            None
-            if not mine
-            else (expected[t] is not None and all(s.linear_kernels == [expected[t]] for s in mine))
-        )
+        matches[t] = None if not mine else all(s.linear_kernels == [expected[t]] for s in mine)
     nll = {t: mean_nll(sessions, t) for t in treatments}
     nv_nll = nll[reference]
     eligibility = {}
@@ -418,7 +421,7 @@ def kernel_scan(
         margin=margin,
         selected=selected,
         selected_kernel=expected[selected] if selected else None,
-        selected_server_args=model.TREATMENTS[selected].server_args if selected else None,
+        selected_server_args=served.args[selected] if selected else None,
         reason=None
         if selected
         else (

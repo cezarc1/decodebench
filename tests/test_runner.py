@@ -18,6 +18,7 @@ from fp4bench.core.schema import (
     load_rows,
 )
 from fp4bench.core.types import Cell, KvDtype, ProbeError, RetryPolicy, Treatment
+from fp4bench.manifest import CODE_COMMIT_ENV, CODE_DIRTY_ENV, CodeVersion
 from fp4bench.runner import rounds_to_run
 from fp4bench.studies import model
 from fp4bench.studies.base import Prompts, ServerSettings, Study, cells_at
@@ -184,6 +185,7 @@ def env(monkeypatch, tmp_path):
         blocks=[],
         m2_calls=[],
         cell_prompts=[],
+        code=None,
     )
 
     class FakeProc:
@@ -250,8 +252,12 @@ def env(monkeypatch, tmp_path):
         return {"uuid": "GPU-1"}
 
     def collect_manifest():
+        """No code version unless a test set `code`, like a manifest from before code_commit."""
         st.calls.append("collect")
-        return {"utc": "2026-10-04T00:00:00+00:00", "gpu": {"name": "NVIDIA B200"}}
+        code = (
+            {} if st.code is None else {"code_commit": st.code.commit, "code_dirty": st.code.dirty}
+        )
+        return {"utc": "2026-10-04T00:00:00+00:00", "gpu": {"name": "NVIDIA B200"}, **code}
 
     def verify_manifest(manifest):
         st.calls.append("verify")
@@ -604,6 +610,90 @@ def test_protocol_check_survives_a_truncated_manifest_tail(stubbed):
     with (stubbed.run_dir / "manifests.jsonl").open("a") as f:
         f.write('{"utc": "2026-10-04T01:')
     assert len(start(stubbed)) == 2
+
+
+SHA_A, SHA_B = "a" * 40, "b" * 40
+
+
+def at_code(env, monkeypatch, code: CodeVersion) -> None:
+    """Later starts run at `code`: the runner reads it from the environment the executors set,
+    and the fake manifest records it as collect_manifest does."""
+    env.code = code
+    for key in (CODE_COMMIT_ENV, CODE_DIRTY_ENV):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in code.env().items():
+        monkeypatch.setenv(key, value)
+
+
+def test_a_restart_at_the_first_starts_commit_from_clean_checkouts_is_allowed(stubbed, monkeypatch):
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    start(stubbed)
+    lines = start(stubbed)
+    assert [(m["code_commit"], m["code_dirty"]) for m in lines] == [(SHA_A, False)] * 2
+
+
+@pytest.mark.parametrize(
+    "first, now",
+    [
+        pytest.param(CodeVersion(SHA_A, False), CodeVersion(SHA_B, False), id="other-commit"),
+        pytest.param(CodeVersion(SHA_A, False), CodeVersion(SHA_A, True), id="dirty-now"),
+        pytest.param(CodeVersion(SHA_A, True), CodeVersion(SHA_A, True), id="dirty-at-first"),
+        pytest.param(CodeVersion(SHA_A, False), CodeVersion(None, None), id="unknown-now"),
+        pytest.param(CodeVersion(None, None), CodeVersion(None, None), id="unknown-at-first"),
+    ],
+)
+def test_a_restart_at_another_or_an_unverifiable_code_version_is_refused_before_any_work(
+    stubbed, monkeypatch, first, now
+):
+    at_code(stubbed, monkeypatch, first)
+    start(stubbed)
+    stubbed.sessions.clear()
+    stubbed.calls.clear()
+    at_code(stubbed, monkeypatch, now)
+    message, lines = refused_start(stubbed, "a run is one code version; start a new run id")
+    assert f"({now.describe()})" in message and f"({first.describe()})" in message
+    assert stubbed.calls == [] and stubbed.sessions == []
+    assert len(lines) == 1
+    assert not (stubbed.run_dir / "errors.jsonl").exists()
+
+
+def test_a_baseline_with_a_commit_but_no_code_dirty_is_refused(stubbed, monkeypatch):
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    start(stubbed)
+    lines = load_jsonl(stubbed.run_dir / "manifests.jsonl")
+    del lines[0]["code_dirty"]
+    write_jsonl(stubbed.run_dir / "manifests.jsonl", lines)
+    stubbed.calls.clear()
+    message, lines = refused_start(stubbed, "a run is one code version; start a new run id")
+    assert f"({CodeVersion(SHA_A, None).describe()})" in message
+    assert stubbed.calls == [] and len(lines) == 1
+
+
+def test_the_code_is_checked_against_the_first_start_that_passed_its_checks(stubbed, monkeypatch):
+    stubbed.problems = [VLLM_MISMATCH]
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    refused_start(stubbed, "environment check failed")
+    stubbed.problems = []
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_B, False))
+    lines = start(stubbed)
+    assert [m["code_commit"] for m in lines] == [SHA_A, SHA_B]
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_A, False))
+    message, lines = refused_start(stubbed, "a run is one code version; start a new run id")
+    assert f"({SHA_A})" in message and f"({SHA_B})" in message
+    assert len(lines) == 2
+
+
+def test_a_restart_of_a_run_whose_first_start_predates_the_code_version_warns_and_goes_on(
+    stubbed, monkeypatch, capsys
+):
+    start(stubbed)
+    at_code(stubbed, monkeypatch, CodeVersion(SHA_B, True))
+    capsys.readouterr()
+    lines = start(stubbed)
+    assert "code_commit" not in lines[0] and lines[1]["code_commit"] == SHA_B
+    (warning,) = capsys.readouterr().err.splitlines()
+    assert warning.startswith("warning: ") and "cannot be checked" in warning
+    assert CodeVersion(SHA_B, True).describe() in warning
 
 
 def test_a_nan_warmup_row_round_trips_through_a_session(env):
@@ -1695,6 +1785,12 @@ def test_a_protocol_with_nva_runs_once_nva_is_pinned_to_another_kernel(
     assert line["problems"] == [] and "NVa" in [t for _, t in stubbed.sessions]
 
 
+def test_an_nva_pin_written_flag_equals_value_is_a_pin(stubbed, monkeypatch):
+    set_nva_args(monkeypatch, ("--linear-backend=flashinfer_cutlass",))
+    (line,) = start(stubbed, ALL_FULL)
+    assert line["problems"] == [] and "NVa" in [t for _, t in stubbed.sessions]
+
+
 @pytest.mark.parametrize("study", [STUDY, SMOKE])
 def test_protocols_without_nva_are_not_held_to_the_nva_rule(stubbed, study):
     assert "NVa" not in study.treatments
@@ -2720,11 +2816,11 @@ def test_m2_batches_are_the_concurrencies_unless_m2_is_off():
 )
 def test_every_committed_run_would_restart_under_its_protocol(tmp_path, run, mode):
     shutil.copy(RUNS_DIR / run / "manifests.jsonl", tmp_path / "manifests.jsonl")
-    rounds = (load_rows(tmp_path / "manifests.jsonl", ManifestLine)[-1].protocol or {})["rounds"]
-    study = replace(STUDIES[mode], rounds=rounds)
-    runner.check_protocol_unchanged(tmp_path, study)
+    lines = load_rows(tmp_path / "manifests.jsonl", ManifestLine)
+    study = replace(STUDIES[mode], rounds=(lines[-1].protocol or {})["rounds"])
+    runner.check_protocol_unchanged(lines, study)
     with pytest.raises(RuntimeError, match="m1_reps"):
-        runner.check_protocol_unchanged(tmp_path, replace(study, m1_reps=4))
+        runner.check_protocol_unchanged(lines, replace(study, m1_reps=4))
 
 
 def drop_from_first_manifest_line(env, *fields):

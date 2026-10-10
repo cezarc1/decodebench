@@ -2,22 +2,41 @@
 
 import json
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
-from fp4bench.analysis.cells import is_pos_int, session_ids
+from fp4bench import settings
+from fp4bench.analysis.cells import is_pos_int, row_cell, session_ids
 from fp4bench.core.schema import M1Row, M2Row, ManifestLine, ServerRow, load_rows
 from fp4bench.core.types import (
+    ActQuantFusion,
     Cell,
     JsonValue,
     KvDtype,
+    LinearKernel,
     RecordedKvDtype,
+    Treatment,
     UnknownKvDtype,
     is_finite,
     is_number,
 )
+from fp4bench.studies import model
 from fp4bench.studies.main import FULL
 from fp4bench.studies.registry import recorded_protocol as protocol
+
+
+class M1Shape(NamedTuple):
+    """What the counted M1 rows record of their blocks: their (C, P) cells, N1 and N2."""
+
+    cells: tuple[Cell, ...]
+    n1: int
+    n2: int
+
+    @property
+    def mean_context_extra(self) -> int:
+        """Tokens past the prompt at a block's mean context over its N1 and N2 waves."""
+        return (self.n1 + self.n2) // 2
 
 
 @dataclass(frozen=True)
@@ -31,6 +50,46 @@ class RunData:
     @property
     def checkpoint(self) -> tuple[dict | None, str | None]:
         return resolve_checkpoint(self.run_dir, self.manifest)
+
+    @cached_property
+    def served(self) -> "Served":
+        return served(self.manifest, self.run_dir)
+
+    @cached_property
+    def m1_shape(self) -> M1Shape:
+        """The counted rows' shape; N1 and N2 are the settings' in a run without rows. A row
+        whose N1 or N2 is not a positive integer, and rows of several (N1, N2), raise
+        ValueError."""
+        counted = session_ids(self.servers)
+        rows = [row for row in self.m1 if row.session_id in counted]
+        for row in rows:
+            for name, value in (("n1", row.n1), ("n2", row.n2)):
+                if not is_pos_int(value):
+                    raise ValueError(
+                        f"{self.run_dir}: the M1 row of session {row.session_id}, set "
+                        f"{row.set}, C={row.c} records {name} {value!r}, not a positive integer"
+                    )
+        pairs = sorted({(row.n1, row.n2) for row in rows})
+        if len(pairs) > 1:
+            raise ValueError(
+                f"{self.run_dir}: several M1 decode lengths (n1, n2) {pairs} in the rows of its "
+                "counted sessions; the mean context is that of one pair"
+            )
+        n1, n2 = pairs[0] if pairs else (settings.M1_N1, settings.M1_N2)
+        cells = sorted({cell for row in rows if (cell := row_cell(row)) is not None})
+        return M1Shape(tuple(cells), n1, n2)
+
+    @property
+    def batch_prompt_len(self) -> int:
+        """The one prompt length of a run analysed by batch (the settings' without rows); a cell
+        study's rows have several, which raise ValueError here."""
+        lens = sorted({cell.prompt_len for cell in self.m1_shape.cells})
+        if len(lens) > 1:
+            raise ValueError(
+                f"{self.run_dir}: M1 cells of several prompt lengths {lens}, but "
+                f"the last manifest line has no protocol.cells (Experiment C)"
+            )
+        return lens[0] if lens else settings.M1_INPUT_LEN
 
 
 def load_run(run_dir: Path) -> RunData:
@@ -56,6 +115,46 @@ def load_run(run_dir: Path) -> RunData:
 def inputs(manifest: ManifestLine | None) -> dict[str, Any]:
     value = None if manifest is None else manifest.inputs
     return value if isinstance(value, dict) else {}
+
+
+@dataclass(frozen=True)
+class Served:
+    """How the run served each treatment: its server args, and the linear kernel class and
+    act-quant fusion those args select (what G1 and the kernel scan expect)."""
+
+    args: dict[Treatment, tuple[str, ...]]
+    kernels: dict[Treatment, LinearKernel]
+    fusions: dict[Treatment, bool]
+
+
+def served(manifest: ManifestLine | None, run_dir: Path) -> Served:
+    """inputs.treatment_server_args of the last manifest line, and model.TREATMENTS' args for a
+    treatment it does not record (or a manifest without the record); a malformed record, or args
+    that select no kernel or fusion, raise ValueError naming the run and the treatment."""
+    where = f"{run_dir}: inputs.treatment_server_args of the last manifest line"
+    recorded = inputs(manifest).get("treatment_server_args", {})
+    if not (
+        isinstance(recorded, dict)
+        and all(t in Treatment for t in recorded)
+        and all(
+            isinstance(args, list) and all(isinstance(a, str) for a in args)
+            for args in recorded.values()
+        )
+    ):
+        raise ValueError(f"{where} is not a list of strings per treatment: {recorded!r}")
+    args = {
+        t: tuple(recorded[t]) if t in recorded else spec.server_args
+        for t, spec in model.TREATMENTS.items()
+    }
+    kernels: dict[Treatment, LinearKernel] = {}
+    fusions: dict[Treatment, bool] = {}
+    for t, served_with in args.items():
+        try:
+            kernels[t] = model.expected_linear_kernel(t, served_with)
+            fusions[t] = model.expected_act_quant_fusion(t, served_with) is ActQuantFusion.ON
+        except ValueError as exc:
+            raise ValueError(f"{where}, {t} {list(served_with)!r}: {exc}") from exc
+    return Served(args, kernels, fusions)
 
 
 def registered_rounds(manifest: ManifestLine | None) -> float | None:
