@@ -5,7 +5,7 @@
 
 Benchmark realistic production-like workloads on non GEMM-bound tasks.
 
-#### NVFP4 vs MXFP4 TL;DR — _Last updated October 2026_
+#### NVFP4 vs MXFP4 TL;DR — _Last updated October 2026. See accompanying [blog post](https://cezarcocu.com/blog/nvfp4-vs-mxfp4-decode-bench/)._
 
 If you're using a B200 GPU all of the evidence points to always preferring NVFP4 over MXFP4, by a non-significant margin, on
 both GEMM-bound workloads as well as low-batch decode workloads. Additionally, quantization from bf16 to the respective formats indicate that nvfp4 should additionally yield non-trivial superior eval perf. 
